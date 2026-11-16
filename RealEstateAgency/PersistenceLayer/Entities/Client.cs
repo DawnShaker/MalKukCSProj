@@ -13,7 +13,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
 
         public Client(string name, string contactInfo, ClientType type)
         {
-            Validate(name, contactInfo);
+            Validate(name, contactInfo, type);
             Name = name;
             ContactInfo = contactInfo;
             Type = type;
@@ -21,19 +21,19 @@ namespace RealEstateAgency.PersistenceLayer.Entities
 
         public void Update(string name, string contactInfo, ClientType type)
         {
-            Validate(name, contactInfo);
+            Validate(name, contactInfo, type);
             Name = name;
             ContactInfo = contactInfo;
             Type = type;
         }
 
-        private void Validate(string name, string contactInfo)
+        private void Validate(string name, string contactInfo, ClientType type)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Ім'я клієнта не може бути порожнім.");
             if (string.IsNullOrWhiteSpace(contactInfo))
                 throw new ArgumentException("Контактна інформація клієнта не може бути порожньою.");
-            if (!Enum.IsDefined(typeof(ClientType), Type))
+            if (!Enum.IsDefined(typeof(ClientType), type))
                 throw new ArgumentException("Некоректний тип клієнта.");
         }
 

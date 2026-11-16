@@ -3,8 +3,9 @@ namespace RealEstateAgency.PersistenceLayer.Entities
     public enum PropertyStatus
     {
         ForSale = 1,
-        ForRent = 2, 
-        Sold = 3
+        ForRent = 2,
+        Reserved = 3,
+        Sold = 4
     }
     public enum ClientType
     {

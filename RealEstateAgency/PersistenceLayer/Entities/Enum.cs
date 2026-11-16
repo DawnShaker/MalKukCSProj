@@ -10,6 +10,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
     public enum ClientType
     {
         Buyer = 1,
+        Tenant = 2,
         Owner = 2
     }
 

@@ -55,4 +55,25 @@ export const agencyApi = {
     if (endDate) params.append("endDate", endDate);
     return request(`/analytics?${params.toString()}`);
   },
+
+  async createClientRequest(clientId, requestDto) {
+    const res = await fetch(`${API_URL}/clients/${clientId}/requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestDto),
+    });
+    
+    if(!res.ok) throw new Error("Помилка створення запиту клієнта");
+    return res.json();
+  },
+
+  async updateProperty(id, propertyDto) {
+    const res = await fetch(`${API_URL}/properties/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(propertyDto),
+    });
+    if (!res.ok) throw new Error("Помилка оновлення об'єкта");
+    return res.ok;
+  },
 };

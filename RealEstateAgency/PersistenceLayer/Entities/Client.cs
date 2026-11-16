@@ -11,10 +11,12 @@ namespace RealEstateAgency.PersistenceLayer.Entities
         public string Name { get; set; } = string.Empty;
         public string ContactInfo { get; set; } = string.Empty;
         public ClientType Type { get; set; }
+        public List<ClientRequest> Requests { get; set; } = new List<ClientRequest>(); 
         public List<SavedClientSearch> SavedSearches { get; set; } = new List<SavedClientSearch>();
         public List<string> Notifications { get; set; } = new List<string>();
 
         public Client() { }
+
 
         public Client(string name, string contactInfo, ClientType type)
         {

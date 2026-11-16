@@ -41,6 +41,9 @@ export default function PropertiesPage() {
   const [propForm, setPropForm] = useState(INITIAL_PROP_FORM);
   const [filter, setFilter] = useState(INITIAL_FILTER);
 
+  // Стан для відстеження режиму редагування
+  const [editingId, setEditingId] = useState(null);
+
   const [saveSearchClient, setSaveSearchClient] = useState("");
   const [saveSearchTitle, setSaveSearchTitle] = useState("");
 
@@ -61,25 +64,57 @@ export default function PropertiesPage() {
     loadData();
   }, []);
 
-  const handleCreateProperty = async (e) => {
+  // Універсальний обробник для створення або оновлення об'єкта
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     try {
-      const data = await agencyApi.createProperty({
+      const payload = {
         ...propForm,
         rooms: Number(propForm.rooms),
         yearBuilt: Number(propForm.yearBuilt),
         area: Number(propForm.area),
         price: Number(propForm.price),
         status: Number(propForm.status),
-      });
-      if (data.notifications?.length > 0) setAlertBanner(data.notifications);
+      };
+
+      if (editingId) {
+        // Режим оновлення (ЕДИТ)
+        await agencyApi.updateProperty(editingId, payload);
+        alert("Об'єкт успішно оновлено!");
+        setEditingId(null);
+      } else {
+        // Режим створення
+        const data = await agencyApi.createProperty(payload);
+        if (data.notifications?.length > 0) setAlertBanner(data.notifications);
+      }
       
-      // Повне очищення всіх полів форми після додавання!
       setPropForm(INITIAL_PROP_FORM);
       loadData();
     } catch (err) {
       alert(err.message);
     }
+  };
+
+  // Кнопка початку редагування (заповнює форму даними об'єкта)
+  const handleStartEdit = (p) => {
+    setEditingId(p.id);
+    setPropForm({
+      type: p.type,
+      rooms: p.rooms,
+      yearBuilt: p.yearBuilt,
+      area: p.area,
+      district: p.district,
+      address: p.address,
+      landmark: p.landmark,
+      price: p.price,
+      status: p.status,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setPropForm(INITIAL_PROP_FORM);
   };
 
   const handleChangeStatus = async (id, newStatus) => {
@@ -165,8 +200,8 @@ export default function PropertiesPage() {
 
       <div className="main-grid">
         <div className="panel">
-          <h3>Додати об'єкт</h3>
-          <form onSubmit={handleCreateProperty} className="form-stack">
+          <h3>{editingId ? "Редагувати об'єкт" : "Додати об'єкт"}</h3>
+          <form onSubmit={handleFormSubmit} className="form-stack">
             <input placeholder="Тип (Квартира / Будинок / Офіс)" value={propForm.type} onChange={(e) => setPropForm({ ...propForm, type: e.target.value })} required />
             <input placeholder="Район (напр. Центр, Поділ)" value={propForm.district} onChange={(e) => setPropForm({ ...propForm, district: e.target.value })} required />
             <input placeholder="Адреса (вул. Нова, 10)" value={propForm.address} onChange={(e) => setPropForm({ ...propForm, address: e.target.value })} required />
@@ -183,8 +218,19 @@ export default function PropertiesPage() {
               <option value="1">Статус: На продаж</option>
               <option value="2">Статус: Оренда</option>
               <option value="3">Статус: Заброньовано</option>
+              <option value="4">Статус: Продано</option>
             </select>
-            <button type="submit" className="btn btn-success">+ Додати об'єкт</button>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="submit" className="btn btn-success" style={{ flex: 1 }}>
+                {editingId ? "Зберегти зміни" : "+ Додати об'єкт"}
+              </button>
+              {editingId && (
+                <button type="button" onClick={handleCancelEdit} className="btn btn-secondary" style={{ padding: "8px 12px" }}>
+                  Скасувати
+                </button>
+              )}
+            </div>
           </form>
 
           <hr style={{ margin: "20px 0", borderColor: "#e2e8f0" }} />
@@ -241,8 +287,8 @@ export default function PropertiesPage() {
           <h3 style={{ marginTop: 0 }}>Каталог об'єктів ({properties.length})</h3>
           <div className="card-list">
             {properties.map((p) => (
-              <div key={p.id} className="item-card">
-                <div>
+              <div key={p.id} className="item-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span className="status-badge" style={{ backgroundColor: STATUS_COLORS[p.status] }}>
                       {STATUS_NAMES[p.status]}
@@ -253,24 +299,46 @@ export default function PropertiesPage() {
                     <span className="price-tag">${p.price.toLocaleString()}</span>
                     <span className="text-muted">(${Math.round(p.price / p.area)}/м²)</span>
                   </div>
-                  <div className="text-muted" style={{ marginTop: 6 }}>
-                    Район: <b>{p.district}</b> | Адреса: <b>{p.address}</b> | Орієнтири: <i>{p.landmark}</i>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select value={p.status} onChange={(e) => handleChangeStatus(p.id, e.target.value)} style={{ width: 130 }}>
+                      <option value="1">На продаж</option>
+                      <option value="2">Оренда</option>
+                      <option value="3">Заброньовано</option>
+                      <option value="4">Продано</option>
+                    </select>
+                    {/* Кнопка редагування об'єкта */}
+                    <button onClick={() => handleStartEdit(p)} className="btn btn-primary" style={{ padding: "4px 8px", fontSize: 13 }}>
+                      Редагувати
+                    </button>
+                    <button onClick={() => setHistoryModal(p)} className="btn btn-secondary">
+                      Історія ({p.statusHistory?.length || 0})
+                    </button>
+                    <button onClick={() => handleDeleteProperty(p.id)} className="btn btn-danger">
+                      Видалити
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <select value={p.status} onChange={(e) => handleChangeStatus(p.id, e.target.value)} style={{ width: 140 }}>
-                    <option value="1">На продаж</option>
-                    <option value="2">Оренда</option>
-                    <option value="3">Заброньовано</option>
-                    <option value="4">Продано</option>
-                  </select>
-                  <button onClick={() => setHistoryModal(p)} className="btn btn-secondary">
-                    Історія ({p.statusHistory?.length || 0})
-                  </button>
-                  <button onClick={() => handleDeleteProperty(p.id)} className="btn btn-danger">
-                    Видалити
-                  </button>
+
+                <div className="text-muted" style={{ marginTop: 6 }}>
+                  Район: <b>{p.district}</b> | Адреса: <b>{p.address}</b> | Орієнтири: <i>{p.landmark}</i>
                 </div>
+
+                {/* Блок динаміки цін */}
+                {p.priceHistory && p.priceHistory.length > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, background: "#f8fafc", padding: "6px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                    <b>Динаміка цін:</b>
+                    <ul style={{ margin: "2px 0 0 16px", padding: 0 }}>
+                      {p.priceHistory.map((ph, idx) => (
+                        <li key={idx}>
+                          ${ph.oldPrice.toLocaleString()} ➔ <b style={{ color: "#16a34a" }}>${ph.newPrice.toLocaleString()}</b> 
+                          <span className="text-muted" style={{ fontSize: 11, marginLeft: 6 }}>
+                            ({new Date(ph.changedAt).toLocaleDateString()}) — <i>{ph.comment}</i>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             ))}
           </div>

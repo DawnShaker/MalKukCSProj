@@ -14,6 +14,8 @@ namespace RealEstateAgency.PersistenceLayer
         public List<Client> Clients { get; set; } = new List<Client>();
         public List<Agent> Agents { get; set; } = new List<Agent>();
         public List<Deal> Deals { get; set; } = new List<Deal>();
+
+        public List<ClientRequest> Requests { get; set; } = new List<ClientRequest>();
     }
 
 }

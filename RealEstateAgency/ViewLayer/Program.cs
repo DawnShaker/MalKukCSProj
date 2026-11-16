@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RealEstateAgency.BusinessLogicLayer;
 using RealEstateAgency.PersistenceLayer;
 using RealEstateAgency.PersistenceLayer.Entities;
+using RealEstateAgency.DTOs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -117,6 +118,9 @@ app.MapDelete("/api/deals/{id}", (AgencyService s, string id, string? reason) =>
 // ================= 4. АНАЛІТИКА ТА СТАТИСТИКА (ЕТАП 3) =================
 app.MapGet("/api/analytics", (AgencyService s, DateTime? startDate, DateTime? endDate) =>
 {
+    var properties = s.GetAllProperties();
+    var clients = s.GetAllClients();
+
     return Results.Ok(new
     {
         dealsCount = s.GetDealsByPeriod(startDate, endDate).Count,
@@ -125,16 +129,20 @@ app.MapGet("/api/analytics", (AgencyService s, DateTime? startDate, DateTime? en
         avgSqmCatalog = s.GetAveragePricePerSquareMeterAllProperties(),
         avgSqmDeals = s.GetAveragePricePerSquareMeterSoldDeals(),
         agentsPerformance = s.GetAgentsPerformance(),
-        mostActiveClients = s.GetMostActiveClients()
+        mostActiveClients = s.GetMostActiveClients(),
+
+        priceDynamics = s.GetPriceDynamics(),
+        totalProperties = properties.Count,
+        forSaleCount = properties.Count(p => p.Status == PropertyStatus.ForSale),
+        forRentCount = properties.Count(p => p.Status == PropertyStatus.ForRent),
+        soldCount = properties.Count(p => p.Status == PropertyStatus.Sold),
+        totalClients = clients.Count,
+        buyersCount = clients.Count(c => c.Type == ClientType.Buyer),
+        tenantsCount = clients.Count(c => c.Type == ClientType.Tenant),
+        ownersCount = clients.Count(c => c.Type == ClientType.Owner),
+        totalRequests = s.GetTotalRequestsCount()
     });
 });
 
 app.Run("http://localhost:5000");
 
-// DTO-рекорди для прийому JSON із React
-public record CreatePropertyDto(string Type, double Area, string Address, string District, string Landmark, int Rooms, decimal Price, PropertyStatus Status, int YearBuilt);
-public record ChangeStatusDto(PropertyStatus NewStatus, string Comment);
-public record CreateClientDto(string Name, string ContactInfo, ClientType Type);
-public record SaveSearchDto(string Title, PropertySearchFilter Filter);
-public record CreateAgentDto(string Name, int ExperienceYears);
-public record CreateDealDto(string PropertyId, string ClientId, string AgentId, decimal Price, DealType DealType, decimal Commission);

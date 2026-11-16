@@ -7,6 +7,13 @@ using System.Numerics;
 
 namespace RealEstateAgency.BusinessLogicLayer
 {
+    public class PriceDynamicsStat
+    {
+        public string Period { get; set; } = string.Empty;
+        public decimal AveragePrice { get; set; }
+        public int DealsCount { get; set; }
+    }
+
     public class AgentPerformanceStat
     {
         public Agent Agent { get; set; } = null!;
@@ -121,7 +128,7 @@ namespace RealEstateAgency.BusinessLogicLayer
         //ПОШУК ТА ЗБЕРЕЖЕННЯ ПОШУКІВ КЛІЄНТІВ
 
         public List<Property> SearchProperties(PropertySearchFilter filter)
-        { 
+        {
             return _context.Properties.Where(p => filter.Matches(p)).ToList();
         }
 
@@ -251,8 +258,8 @@ namespace RealEstateAgency.BusinessLogicLayer
         {
             var deal = GetDealById(dealId);
             var property = _context.Properties.FirstOrDefault(p => p.Id == deal.PropertyId);
-            
-            if(property != null)
+
+            if (property != null)
             {
                 var restoredStatus = deal.Type == DealType.Purchase ? PropertyStatus.ForSale : PropertyStatus.ForRent;
                 property.ChangeStatus(restoredStatus, $"Угода [{deal.Id.ToString().Substring(0, 8)}] розірвана: {reason}", allowFromSold: true);
@@ -305,7 +312,7 @@ namespace RealEstateAgency.BusinessLogicLayer
             {
                 var prop = _context.Properties.FirstOrDefault(p => p.Id == deal.PropertyId);
 
-                if(prop != null && prop.Area > 0)
+                if (prop != null && prop.Area > 0)
                 {
                     dealPricesPerSqm.Add(deal.TotalCost / (decimal)prop.Area);
                 }
@@ -348,6 +355,65 @@ namespace RealEstateAgency.BusinessLogicLayer
             .ThenByDescending(c => c.TotalSpent)
             .ThenByDescending(c => c.SavedSearchesCount)
             .ToList();
+        }
+
+        public ClientRequest CreateClientRequest(Guid clientId, string title, PropertySearchFilter filter)
+        {
+            var client = GetClientById(clientId.ToString()) ?? throw new Exception("Клієнта не знайдено.");
+
+            var request = new ClientRequest(clientId, title, filter);
+            _context.Requests.Add(request);
+            SaveChanges();
+            return request;
+        }
+
+        public List<Property> MatchPropertiesForRequest(Guid requestId)
+        {
+            var request = _context.Requests.FirstOrDefault(r => r.Id == requestId)
+                ?? throw new Exception("Запит не знайдено.");
+
+            return _context.Properties.Where(p => request.Filter.Matches(p)).ToList();
+        }
+
+        public List<Property> MatchPropertiesForClientSavedSearches(Guid clientId)
+        {
+            var client = GetClientById(clientId.ToString()) ?? throw new Exception("Клієнта не знайдено.");
+            var matchedProperties = new HashSet<Property>();
+
+            foreach (var search in client.SavedSearches)
+            {
+                var found = _context.Properties.Where(p => search.Filter.Matches(p));
+                foreach (var prop in found)
+                {
+                    matchedProperties.Add(prop);
+                }
+            }
+
+            return matchedProperties.ToList();
+        }
+
+        public decimal GetTotalAgencyIncome()
+        {
+            return _context.Deals.Sum(d => d.TotalCost * (d.CommissionPercent / 100m));
+        }
+
+        public List<PriceDynamicsStat> GetPriceDynamics()
+        {
+            return _context.Deals
+                .GroupBy(d => new { d.Date.Year, d.Date.Month })
+                .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
+                .Select(g => new PriceDynamicsStat
+                {
+                    Period = $"{g.Key.Year}-{g.Key.Month:D2}",
+                    AveragePrice = g.Average(d => d.TotalCost),
+                    DealsCount = g.Count()
+                })
+                .ToList();
+        }
+
+        public int GetTotalRequestsCount()
+        {
+            return _context.Requests?.Count ?? 0;
         }
     }
 }

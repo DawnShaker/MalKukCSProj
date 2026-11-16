@@ -17,6 +17,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
         public decimal Price { get; set; }
         public PropertyStatus Status { get; set; }
         public List<StatusHistoryEntry> StatusHistory { get; set; } = new List<StatusHistoryEntry>();
+        public List<PriceHistoryEntry> PriceHistory { get; set; } = new List<PriceHistoryEntry>();
 
         public Property() { }
 
@@ -39,11 +40,29 @@ namespace RealEstateAgency.PersistenceLayer.Entities
                 NewStatus = status,
                 Comment = "Початковий статус при створенні об'єкта"
             });
+
+            PriceHistory.Add(new PriceHistoryEntry
+            {
+                OldPrice = price,
+                NewPrice = price,
+                Comment = "Початкова ціна при створенні об'єкта"
+            });
         }
 
-        public void Update(string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus newStatus, int yearBuilt)
+        public void Update(string type, double area, string address, string district, string landmark, int rooms, decimal newPrice, PropertyStatus newStatus, int yearBuilt)
         {
-            Validate(type, area, address, district, landmark, rooms, price, newStatus, yearBuilt);
+            Validate(type, area, address, district, landmark, rooms, newPrice, newStatus, yearBuilt);
+
+            if(Price != newPrice)
+            {
+                PriceHistory.Add(new PriceHistoryEntry
+                {
+                    ChangedAt = DateTime.Now,
+                    OldPrice = Price,
+                    NewPrice = newPrice,
+                    Comment = $"Зміна ціни з ${Price} на ${newPrice}"
+                });
+            }
 
             if(Status != newStatus)
             {
@@ -57,7 +76,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
             Landmark = landmark;
             Rooms = rooms;
             YearBuilt = yearBuilt;
-            Price = price;
+            Price = newPrice;
             Status = newStatus;
         }
 

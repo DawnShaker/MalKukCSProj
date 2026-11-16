@@ -24,6 +24,20 @@
           "NewStatus": 4,
           "Comment": "Укладено угоду [5a66b6b2]"
         }
+      ],
+      "PriceHistory": [
+        {
+          "ChangedAt": "2026-11-16T18:27:09.2674387+02:00",
+          "OldPrice": 35000,
+          "NewPrice": 350,
+          "Comment": "Зміна ціни з $35000 на $350"
+        },
+        {
+          "ChangedAt": "2026-11-16T19:00:07.4717641+02:00",
+          "OldPrice": 350,
+          "NewPrice": 35000,
+          "Comment": "Зміна ціни з $350 на $35000"
+        }
       ]
     },
     {
@@ -36,15 +50,22 @@
       "Rooms": 2,
       "YearBuilt": 2022,
       "Price": 62000,
-      "Status": 1,
+      "Status": 4,
       "StatusHistory": [
         {
           "ChangedAt": "2026-11-16T13:32:19.1772504+02:00",
           "OldStatus": 1,
           "NewStatus": 1,
           "Comment": "Початковий статус при створенні об\u0027єкта"
+        },
+        {
+          "ChangedAt": "2026-11-16T14:41:59.9765247+02:00",
+          "OldStatus": 1,
+          "NewStatus": 4,
+          "Comment": "Укладено угоду [8cda6a8e]"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "8e96ffe7-173c-4e96-b28f-82976d97ccf4",
@@ -55,7 +76,7 @@
       "Landmark": "парк, лікарня, ринок",
       "Rooms": 3,
       "YearBuilt": 1998,
-      "Price": 62000,
+      "Price": 68000,
       "Status": 1,
       "StatusHistory": [
         {
@@ -63,6 +84,14 @@
           "OldStatus": 1,
           "NewStatus": 1,
           "Comment": "Початковий статус при створенні об\u0027єкта"
+        }
+      ],
+      "PriceHistory": [
+        {
+          "ChangedAt": "2026-11-16T18:23:12.8092269+02:00",
+          "OldPrice": 62000,
+          "NewPrice": 68000,
+          "Comment": "Зміна ціни з $62000 на $68000"
         }
       ]
     },
@@ -90,7 +119,8 @@
           "NewStatus": 2,
           "Comment": "Зміна статусу через веб-інтерфейс"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "15b6ef5d-e619-462a-8c51-6cdc1ccac98f",
@@ -110,7 +140,8 @@
           "NewStatus": 1,
           "Comment": "Початковий статус при створенні об\u0027єкта"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "93a27590-88fe-4767-85aa-de30f55ba85a",
@@ -130,7 +161,8 @@
           "NewStatus": 1,
           "Comment": "Початковий статус при створенні об\u0027єкта"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "33ddd7b0-e3a7-4679-9981-71cbc88049dc",
@@ -150,7 +182,8 @@
           "NewStatus": 1,
           "Comment": "Початковий статус при створенні об\u0027єкта"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "b92f46ef-539c-451f-a2cc-c4d16afd4b00",
@@ -170,7 +203,8 @@
           "NewStatus": 1,
           "Comment": "Початковий статус при створенні об\u0027єкта"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "0e50d969-1dab-44eb-b2ac-f6042ae41a7a",
@@ -196,7 +230,8 @@
           "NewStatus": 2,
           "Comment": "Зміна статусу через веб-інтерфейс"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "8348f019-e8e1-42ae-b1ab-3a969b69a092",
@@ -216,7 +251,8 @@
           "NewStatus": 1,
           "Comment": "Початковий статус при створенні об\u0027єкта"
         }
-      ]
+      ],
+      "PriceHistory": []
     },
     {
       "Id": "c933c7ef-bf65-48d0-9428-45ab41b00536",
@@ -236,7 +272,29 @@
           "NewStatus": 2,
           "Comment": "Початковий статус при створенні об\u0027єкта"
         }
-      ]
+      ],
+      "PriceHistory": []
+    },
+    {
+      "Id": "758474a2-fe13-425f-bcc8-3231fcd0071b",
+      "Type": "Квартира",
+      "Area": 45,
+      "Address": "Нова 15",
+      "District": "Центр",
+      "Landmark": "парк",
+      "Rooms": 3,
+      "YearBuilt": 2007,
+      "Price": 500,
+      "Status": 2,
+      "StatusHistory": [
+        {
+          "ChangedAt": "2026-11-16T14:40:15.3091577+02:00",
+          "OldStatus": 2,
+          "NewStatus": 2,
+          "Comment": "Початковий статус при створенні об\u0027єкта"
+        }
+      ],
+      "PriceHistory": []
     }
   ],
   "Clients": [
@@ -245,6 +303,7 @@
       "Name": "Клієнт-1",
       "ContactInfo": "0987776984",
       "Type": 1,
+      "Requests": [],
       "SavedSearches": [
         {
           "Id": "d90508d3-1670-44cb-856b-d0f7910f3923",
@@ -267,6 +326,7 @@
         }
       ],
       "Notifications": [
+        "[16.11.2026 14:40] Клієнту Клієнт-1 (0987776984): з\u0027явився новий об\u0027єкт за вашим пошуком \u0022Підписка 1\u0022 -\u003E Квартира, 45 м\u00B2, 2007 р., р-н Центр, $500",
         "[16.11.2026 13:48] Клієнту Клієнт-1 (0987776984): з\u0027явився новий об\u0027єкт за вашим пошуком \u0022Підписка 1\u0022 -\u003E Квартира, 37 м\u00B2, 2000 р., р-н Цетр, $400"
       ]
     },
@@ -275,6 +335,16 @@
       "Name": "Власник-1",
       "ContactInfo": "sdsfdf@gmail.com",
       "Type": 2,
+      "Requests": [],
+      "SavedSearches": [],
+      "Notifications": []
+    },
+    {
+      "Id": "f2f320ea-46ed-4853-984b-64870a32c32b",
+      "Name": "Клієнт-2",
+      "ContactInfo": "232323",
+      "Type": 1,
+      "Requests": [],
       "SavedSearches": [],
       "Notifications": []
     }
@@ -289,6 +359,11 @@
       "Id": "957cd77f-aa0e-4961-bc52-58ec5c847300",
       "Name": "Андрій Коваленко",
       "ExperienceYears": 8
+    },
+    {
+      "Id": "342b1db2-4f81-4ed5-bef7-d9e41b1385d2",
+      "Name": "цуцуцу",
+      "ExperienceYears": 5
     }
   ],
   "Deals": [
@@ -301,6 +376,17 @@
       "TotalCost": 35000,
       "Type": 1,
       "CommissionPercent": 10
+    },
+    {
+      "Id": "8cda6a8e-ab18-4f4f-9620-1ed4f2a2c117",
+      "Date": "2026-11-16T14:41:59.9763769+02:00",
+      "PropertyId": "599cf606-4a7a-4bbb-baad-5976c402e101",
+      "AgentId": "cf5bceff-d121-4bff-9555-968e981380ce",
+      "ClientId": "f2f320ea-46ed-4853-984b-64870a32c32b",
+      "TotalCost": 450000,
+      "Type": 1,
+      "CommissionPercent": 5
     }
-  ]
+  ],
+  "Requests": []
 }

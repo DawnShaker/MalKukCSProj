@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using System.Globalization;
 using RealEstateAgency.BusinessLogicLayer;
 using RealEstateAgency.PersistenceLayer;
 using RealEstateAgency.PersistenceLayer.Entities;
@@ -19,9 +20,9 @@ namespace RealEstateAgency.ViewLayer
             bool exit = false;
             while (!exit)
             {
-                Console.WriteLine("\n================ РІЄЛТОРСЬКЕ АГЕНТСТВО (ЕТАП 2) ================");
+                Console.WriteLine("\n================ РІЄЛТОРСЬКЕ АГЕНТСТВО (ЕТАП 3) ================");
                 Console.WriteLine("1. Показати всі об'єкти нерухомості");
-                Console.WriteLine("2. Додати об'єкт нерухомості");
+                Console.WriteLine("2. Додати об'єкт нерухомості (з автоперевіркою підписок клієнтів)");
                 Console.WriteLine("3. Редагувати об'єкт нерухомості");
                 Console.WriteLine("4. Видалити об'єкт нерухомості");
                 Console.WriteLine("----------------------------------------------------------------");
@@ -32,12 +33,15 @@ namespace RealEstateAgency.ViewLayer
                 Console.WriteLine("----------------------------------------------------------------");
                 Console.WriteLine("9. Керування рієлторами (Список / Додати / Видалити)");
                 Console.WriteLine("10. Створити нову угоду (з розрахунком комісії)");
-                Console.WriteLine("11. Розірвати угоду (скасувати договір)");
-                Console.WriteLine("12. Показати всі угоди");
+                Console.WriteLine("11. Показати всі угоди");
                 Console.WriteLine("----------------------------------------------------------------");
-                Console.WriteLine("13. Змінити статус об'єкта (На продаж -> Заброньовано -> Продано)");
-                Console.WriteLine("14. Показати історію змін статусів об'єкта");
-                Console.WriteLine("15. Пошук нерухомості за комбінованими фільтрами");
+                Console.WriteLine("12. Змінити статус об'єкта (На продаж -> Заброньовано -> Продано)");
+                Console.WriteLine("13. Показати історію змін статусів об'єкта");
+                Console.WriteLine("14. Пошук нерухомості за фільтрами (+ збереження пошуку клієнта)");
+                Console.WriteLine("15. Розірвати угоду (скасувати договір)");
+                Console.WriteLine("----------------------------------------------------------------");
+                Console.WriteLine("16. Пошуки клієнта (Переглянути збережені до 10 шт. / Сповіщення)");
+                Console.WriteLine("17. Статистика та аналітика агентства (Етап 3)");
                 Console.WriteLine("0. Вихід");
                 Console.Write("Ваш вибір: ");
 
@@ -57,11 +61,13 @@ namespace RealEstateAgency.ViewLayer
                         case "8": DeleteClientUI(service); break;
                         case "9": ManageAgentsUI(service); break;
                         case "10": CreateDealUI(service); break;
-                        case "11": CancelDealUI(service); break;
-                        case "12": ShowDeals(service); break;
-                        case "13": ChangePropertyStatusUI(service); break;
-                        case "14": ShowPropertyHistoryUI(service); break;
-                        case "15": SearchPropertiesUI(service); break;
+                        case "11": ShowDeals(service); break;
+                        case "12": ChangePropertyStatusUI(service); break;
+                        case "13": ShowPropertyHistoryUI(service); break;
+                        case "14": SearchPropertiesUI(service); break;
+                        case "15": CancelDealUI(service); break;
+                        case "16": ManageClientSearchesUI(service); break;
+                        case "17": ShowStatisticsAndAnalyticsUI(service); break;
                         case "0":
                             exit = true;
                             Console.WriteLine("Роботу завершено. Дані збережено в agency_data.json.");
@@ -105,6 +111,10 @@ namespace RealEstateAgency.ViewLayer
             Console.Write("Кількість кімнат: ");
             int rooms = int.Parse(Console.ReadLine() ?? "1");
 
+            Console.Write("Рік спорудження (напр. 2015): ");
+            string yearStr = Console.ReadLine() ?? "";
+            int yearBuilt = int.TryParse(yearStr, out int y) ? y : 2020;
+
             Console.Write("Площа (м²): ");
             double area = double.Parse(Console.ReadLine() ?? "0");
 
@@ -123,8 +133,18 @@ namespace RealEstateAgency.ViewLayer
             Console.Write("Статус (1 - На продаж, 2 - Оренда, 3 - Заброньовано, 4 - Продано): ");
             var status = (PropertyStatus)int.Parse(Console.ReadLine() ?? "1");
 
-            service.CreateProperty(type, area, address, district, landmark, rooms, price, status);
+            service.CreateProperty(type, area, address, district, landmark, rooms, price, status, yearBuilt, out var notifications);
             Console.WriteLine("Об'єкт успішно додано!");
+
+            if(notifications.Count > 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\nЗнайдено збіги зі збереженими пошуками клієнтів ({notifications.Count}):");
+
+                foreach (var note in notifications)
+                    Console.WriteLine(" -> " + note);
+                Console.ResetColor();
+            }
         }
 
         static void UpdatePropertyUI(AgencyService service)
@@ -138,6 +158,10 @@ namespace RealEstateAgency.ViewLayer
 
             Console.Write("Нова кількість кімнат: ");
             int rooms = int.Parse(Console.ReadLine() ?? "1");
+
+            Console.Write("Новий рік спорудження: ");
+            string yearStr = Console.ReadLine() ?? "";
+            int yearBuilt = int.TryParse(yearStr, out int y) ? y : 2020;
 
             Console.Write("Нова площа (м²): ");
             double area = double.Parse(Console.ReadLine() ?? "0");
@@ -157,7 +181,7 @@ namespace RealEstateAgency.ViewLayer
             Console.Write("Новий статус (1 - На продаж, 2 - Оренда, 3 - Заброньовано, 4 - Продано): ");
             var status = (PropertyStatus)int.Parse(Console.ReadLine() ?? "1");
 
-            service.UpdateProperty(id, type, area, address, district, landmarks, rooms, price, status);
+            service.UpdateProperty(id, type, area, address, district, landmarks, rooms, price, status, yearBuilt);
             Console.WriteLine("Об'єкт успішно оновлено!");
         }
 
@@ -216,8 +240,16 @@ namespace RealEstateAgency.ViewLayer
             if (!string.IsNullOrWhiteSpace(landmark)) filter.Landmark = landmark;
 
             Console.Write("Кількість кімнат: ");
-            string roomsInput = Console.ReadLine() ?? "";
-            if (int.TryParse(roomsInput, out int rooms)) filter.Rooms = rooms;
+            string roomInput = Console.ReadLine() ?? "";
+            if (int.TryParse(roomInput, out int rooms)) filter.Rooms = rooms;
+
+            Console.Write("Рік спорудження ВІД (напр. 2010): ");
+            string minYearStr = Console.ReadLine() ?? "";
+            if (int.TryParse(minYearStr, out int minYear)) filter.MinYearBuilt = minYear;
+
+            Console.Write("Рік спорудження ДО: ");
+            string maxYearStr = Console.ReadLine() ?? "";
+            if (int.TryParse(maxYearStr, out int maxYear)) filter.MaxYearBuilt = maxYear;
 
             Console.Write("Мінімальна площа (м²): ");
             string minAreaStr = Console.ReadLine() ?? "";
@@ -244,9 +276,128 @@ namespace RealEstateAgency.ViewLayer
             Console.WriteLine($"\n--- ЗНАЙДЕНО ОБ'ЄКТІВ: {results.Count} ---");
             foreach (var p in results)
                 Console.WriteLine(p);
+
+            Console.Write("\nБажаєте зберегти цей пошук для клієнта? (y/n): ");
+            if(Console.ReadLine()?.Trim().ToLower() == "y")
+            {
+                ShowClients(service);
+                Console.Write("Введіть ID клієнта (перші символи): ");
+                string clientId = Console.ReadLine() ?? "";
+
+                Console.Write("Введіть назву пошуку (напр. 'Рік від 2010 з площею до 70 м2'): ");
+                string title = Console.ReadLine() ?? "";
+
+                service.SaveClientSearch(clientId, title, filter);
+                Console.WriteLine("Пошук успішно збережено у профілі клієнта (зберігається до 10 останніх пошуків)!");
+            }
         }
 
-            static void DeletePropertyUI(AgencyService service)
+        static void ManageClientSearchesUI(AgencyService service)
+        {
+            ShowClients(service);
+            Console.Write("\nВведіть ID клієнта для перегляду його пошуків та сповіщень (перші символи): ");
+            string clientId = Console.ReadLine() ?? "";
+
+            var client = service.GetClientById(clientId);
+            Console.WriteLine($"\n=== ПРОФІЛЬ ПОШУКІВ КЛІЄНТА: {client.Name} ===");
+
+            var searches = service.GetClientSavedSearches(clientId);
+            Console.WriteLine($"\n--- ЗБЕРЕЖЕНІ ПОШУКИ (останні {searches.Count} з 10) ---");
+            if(searches.Count == 0)
+            {
+                Console.WriteLine("У клієнта ще немає збережених пошуків.");
+            }
+            else
+            {
+                for(int i = 0; i < searches.Count; i++)
+                    Console.WriteLine($"{i + 1}. {searches[i]}");
+            }
+
+            var notifications = service.GetClientNotifications(clientId);
+            Console.WriteLine($"\n--- АВТОМАТИЧНІ СПОВІЩЕННЯ ПРО НОВІ ОБ'ЄКТИ ({notifications.Count}) ---");
+
+            if(notifications.Count == 0)
+            {
+                Console.WriteLine("Нових сповіщень немає.");
+            }
+            else
+            {
+                foreach (var note in notifications)
+                    Console.WriteLine(" * " + note);
+            }
+
+            if(searches.Count > 0)
+            {
+                Console.Write("\nБажаєте повторно виконати один зі збережених пошуків? Введіть його номер (1..10) або Enter для виходу: ");
+                string idxStr = Console.ReadLine() ?? "";
+
+                if(int.TryParse(idxStr, out int idx) && idx >= 1 && idx <= searches.Count)
+                {
+                    var selectedSearch = searches[idx - 1];
+                    var matchedProps = service.SearchProperties(selectedSearch.Filter);
+                    Console.WriteLine($"\n--- РЕЗУЛЬТАТИ ЗА ПОШУКОМ \"{selectedSearch.Title}\" (Знайдено: {matchedProps.Count}) ---");
+
+                    foreach (var p in matchedProps)
+                        Console.WriteLine(p);
+                }
+            }
+        }
+
+        static void ShowStatisticsAndAnalyticsUI(AgencyService service)
+        {
+            Console.WriteLine("\n================ СТАТИСТИКА ТА АНАЛІТИКА (ЕТАП 3) ================");
+            Console.Write("Введіть початкову дату періоду (дд.мм.рррр) або натисніть Enter (за весь час): ");
+            string startStr = Console.ReadLine() ?? "";
+
+            DateTime? startDate = null;
+            if (DateTime.TryParseExact(startStr, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime sDate))
+                startDate = sDate;
+
+            Console.Write("Введіть кінцеву дату періоду (дд.мм.рррр) або натисніть Enter (до сьогодні): ");
+            string endStr = Console.ReadLine() ?? "";
+
+            DateTime? endDate = null;
+            if (DateTime.TryParseExact(endStr, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime eDate))
+                endDate = eDate;
+
+            var periodDeals = service.GetDealsByPeriod(startDate, endDate);
+            decimal totalSales = service.GetTotalSalesAmount(startDate, endDate);
+            decimal totalProfit = service.GetTotalAgencyProfit(startDate, endDate);
+            decimal avgSqmCatalog = service.GetAveragePricePerSquareMeterAllProperties();
+            decimal avgSqmDeals = service.GetAveragePricePerSquareMeterSoldDeals();
+
+            Console.WriteLine("\n--- 1. ЗАГАЛЬНІ ПОКАЗНИКИ ПРОДАЖІВ ТА ВАРТОСТІ М² ---");
+            Console.WriteLine($"Кількість успішних угод за обраний період: {periodDeals.Count}");
+            Console.WriteLine($"Загальна сума продажів (обсяг угод):       ${totalSales:F2}");
+            Console.WriteLine($"Загальний прибуток агентства (комісійні):  ${totalProfit:F2}");
+            Console.WriteLine($"Середня вартість 1 м² (по всіх об'єктах):  ${avgSqmCatalog:F2} / м²");
+            Console.WriteLine($"Середня вартість 1 м² (по угодах):         ${avgSqmDeals:F2} / м²");
+
+            Console.WriteLine("\n--- 2. ЕФЕКТИВНІСТЬ РІЄЛТОРІВ ---");
+            var agentStats = service.GetAgentsPerformance();
+
+            foreach(var stat in agentStats)
+            {
+                Console.WriteLine($"Рієлтор: {stat.Agent.Name} (досвід {stat.Agent.ExperienceYears} р.) | Угод: {stat.DealsCount} | Сума угод: ${stat.TotalSalesVolume:F2} | Прибуток (комісія): ${stat.TotalCommissionProfit:F2}");
+            }
+
+            Console.WriteLine("\n--- 3. НАЙАКТИВНІШІ КЛІЄНТИ ---");
+            var clientStats = service.GetMostActiveClients();
+
+            if (clientStats.Count == 0)
+            {
+                Console.WriteLine("Клієнти відсутні.");
+            }
+            else
+            {
+                foreach(var cStat in clientStats)
+                {
+                    Console.WriteLine($"Клієнт: {cStat.Client.Name} ({cStat.Client.Type}) | Укладено угод: {cStat.DealsCount} | На суму: ${cStat.TotalSpent:F2} | Збережених пошуків: {cStat.SavedSearchesCount}");
+                }
+            }
+        }
+
+        static void DeletePropertyUI(AgencyService service)
         {
             ShowProperties(service);
             Console.Write("\nВведіть ID об'єкта для видалення (перші символи): ");

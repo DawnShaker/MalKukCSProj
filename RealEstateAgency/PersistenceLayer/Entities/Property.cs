@@ -13,15 +13,16 @@ namespace RealEstateAgency.PersistenceLayer.Entities
         public string District { get; set; } = string.Empty;
         public string Landmark { get; set; } = string.Empty;
         public int Rooms { get; set; }
+        public int YearBuilt { get; set; } = DateTime.Now.Year;
         public decimal Price { get; set; }
         public PropertyStatus Status { get; set; }
         public List<StatusHistoryEntry> StatusHistory { get; set; } = new List<StatusHistoryEntry>();
 
         public Property() { }
 
-        public Property(string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus status)
+        public Property(string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus status, int yearBuilt)
         {
-            Validate(type, area, address, district, landmark, rooms, price, status);
+            Validate(type, area, address, district, landmark, rooms, price, status, yearBuilt);
             Type = type;
             Area = area;
             Address = address;
@@ -30,6 +31,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
             Rooms = rooms;
             Price = price;
             Status = status;
+            YearBuilt = yearBuilt;
 
             StatusHistory.Add(new StatusHistoryEntry
             {
@@ -39,9 +41,9 @@ namespace RealEstateAgency.PersistenceLayer.Entities
             });
         }
 
-        public void Update(string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus newStatus)
+        public void Update(string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus newStatus, int yearBuilt)
         {
-            Validate(type, area, address, district, landmark, rooms, price, newStatus);
+            Validate(type, area, address, district, landmark, rooms, price, newStatus, yearBuilt);
 
             if(Status != newStatus)
             {
@@ -54,6 +56,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
             District = district;
             Landmark = landmark;
             Rooms = rooms;
+            YearBuilt = yearBuilt;
             Price = price;
             Status = newStatus;
         }
@@ -83,7 +86,9 @@ namespace RealEstateAgency.PersistenceLayer.Entities
             Status = newStatus;
         }
 
-        private void Validate(string type, double area, string address, string district, string Landmark, int rooms, decimal price, PropertyStatus status)
+        public decimal GetPricePerSquareMeter() => Area > 0 ? Price / (decimal)Area : 0m;
+
+        private void Validate(string type, double area, string address, string district, string Landmark, int rooms, decimal price, PropertyStatus status, int yearBuilt)
         {
             if (string.IsNullOrWhiteSpace(type))
                 throw new ArgumentException("Тип нерухомості не може бути порожнім.");
@@ -97,6 +102,8 @@ namespace RealEstateAgency.PersistenceLayer.Entities
                 throw new ArgumentException("Орієнтир не може бути порожнім.");
             if (rooms <= 0)
                 throw new ArgumentException("Кількість кімнат повинна бути більшою за нуль.");
+            if(yearBuilt < 1800 || yearBuilt > DateTime.Now.Year)
+                throw new ArgumentException("Рік побудови повинен бути в межах від 1800 до поточного року.");
             if (price <= 0)
                 throw new ArgumentException("Ціна нерухомості повинна бути більшою за нуль.");
             if (!Enum.IsDefined(typeof(PropertyStatus), status))
@@ -105,7 +112,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
 
         public override string ToString()
         {
-            return $"[{Id.ToString().Substring(0, 8)}] {Type} ({Rooms} кімн., {Area} м²) | Район: {District} | Адреса: {Address} | Орієнтири: {Landmark} | ${Price} | Статус: {Status}";
+            return $"[{Id.ToString().Substring(0, 8)}] {Type} ({Rooms} кімн., {Area} м², {YearBuilt} р.) | Район: {District} | Адреса: {Address} | Орієнтири: {Landmark} | ${Price} (${GetPricePerSquareMeter():F0}/м²) | Статус: {Status}";
         }
     }
 }

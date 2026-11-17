@@ -12,7 +12,7 @@ export default function Navbar() {
     <header className="app-header">
       <div>
         <h1>Рієлторське агентство — CRM</h1>
-        <small>Трирівнева архітектура C# .NET + React Router SPA</small>
+        <small>Облік нерухомості, клієнтів та угод</small>
       </div>
       <nav className="nav-tabs">
         {links.map((link) => (

@@ -1,0 +1,13 @@
+{
+  "name": "real-estate-agency",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "test": "node --test server/*.test.mjs",
+    "db:import": "node --env-file-if-exists=.env scripts/import-data.mjs"
+  }
+}

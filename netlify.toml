@@ -1,0 +1,36 @@
+[build]
+  command = "npm run build"
+  publish = "client-app/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# Keep this after the API rule so unknown API routes return JSON, not index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[dev]
+  command = "npm --prefix client-app run dev"
+  targetPort = 5173
+  port = 8888
+  autoLaunch = false

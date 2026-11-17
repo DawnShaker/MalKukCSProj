@@ -1,11 +1,15 @@
-const API_URL = "http://localhost:5000/api";
+const API_URL = "/api";
 
 async function request(endpoint, options = {}) {
   const res = await fetch(`${API_URL}${endpoint}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
-  const data = await res.json().catch(() => ({}));
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error("API недоступне. Перевірте запуск сервера або налаштування Netlify.");
+  }
+  const data = await res.json();
   if (!res.ok) {
     throw new Error(data.error || "Помилка запиту до сервера");
   }
@@ -56,24 +60,9 @@ export const agencyApi = {
     return request(`/analytics?${params.toString()}`);
   },
 
-  async createClientRequest(clientId, requestDto) {
-    const res = await fetch(`${API_URL}/clients/${clientId}/requests`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestDto),
-    });
-    
-    if(!res.ok) throw new Error("Помилка створення запиту клієнта");
-    return res.json();
-  },
+  createClientRequest: (clientId, requestDto) =>
+    request(`/clients/${clientId}/requests`, { method: "POST", body: JSON.stringify(requestDto) }),
 
-  async updateProperty(id, propertyDto) {
-    const res = await fetch(`${API_URL}/properties/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(propertyDto),
-    });
-    if (!res.ok) throw new Error("Помилка оновлення об'єкта");
-    return res.ok;
-  },
+  updateProperty: (id, propertyDto) =>
+    request(`/properties/${id}`, { method: "PUT", body: JSON.stringify(propertyDto) }),
 };

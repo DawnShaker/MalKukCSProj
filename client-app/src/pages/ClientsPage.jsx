@@ -1,175 +1,322 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { agencyApi } from "../api/agencyApi";
+import { useAuth } from "../auth/AuthContext";
+import SearchFilterFields, {
+  emptyFilter,
+  filterPayload,
+} from "../components/SearchFilterFields";
 
-const CLIENT_TYPE_NAMES = { 1: "Покупець", 2: "Орендар", 3: "Власник" };
-const CLIENT_TYPE_COLORS = { 1: "#2563eb", 2: "#d97706", 3: "#16a34a" };
-
-export default function ClientsPage() {
-  const [clients, setClients] = useState([]);
-  const [clientForm, setClientForm] = useState({ name: "", contactInfo: "", type: 1 });
-  
-  const [requestModalClient, setRequestModalClient] = useState(null);
-  const [requestTitle, setRequestTitle] = useState("");
-
-  const loadClients = async () => {
-    try {
-      const data = await agencyApi.getClients();
-      setClients(data);
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  useEffect(() => {
-    loadClients();
-  }, []);
-
-  const handleCreateClient = async (e) => {
-    e.preventDefault();
-    try {
-      await agencyApi.createClient({
-        name: clientForm.name,
-        contactInfo: clientForm.contactInfo,
-        type: Number(clientForm.type),
-      });
-      setClientForm({ name: "", contactInfo: "", type: 1 });
-      loadClients();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const handleDeleteClient = async (id) => {
-    try {
-      await agencyApi.deleteClient(id);
-      loadClients();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const handleCreateRequest = async (e) => {
-    e.preventDefault();
-    if (!requestModalClient) return;
-    try {
-      await agencyApi.createClientRequest(requestModalClient.id, {
-        title: requestTitle,
-        filter: { type: "", district: "", minPrice: null, maxPrice: null }
-      });
-      alert("Запит успішно створено!");
-      setRequestTitle("");
-      setRequestModalClient(null);
-      loadClients();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
+const blank = { name: "", contactInfo: "", type: 1, agentId: "" };
+const types = { 1: "Покупець", 2: "Орендар", 3: "Власник" };
+function RequestEditor({ client, onCreated }) {
+  const [filter, setFilter] = useState(emptyFilter);
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
-    <div className="main-grid">
-      <div className="panel">
-        <h3>Додати клієнта</h3>
-        <form onSubmit={handleCreateClient} className="form-stack">
+    <details>
+      <summary>Створити запит клієнта</summary>
+      <form
+        action={`/api/clients/${client.id}/requests`}
+        method="post"
+        className="form-stack save-filter"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            await agencyApi.createClientRequest(client.id, {
+              title,
+              filter: filterPayload(filter),
+            });
+            setTitle("");
+            await onCreated();
+          } catch (error) {
+            setError(error.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {client.savedSearches.length > 0 && (
+          <div className="field">
+            <label htmlFor={`previous-${client.id}`}>
+              Взяти умови зі збереженого пошуку
+            </label>
+            <select
+              id={`previous-${client.id}`}
+              defaultValue=""
+              onChange={(e) => {
+                const selected = client.savedSearches.find(
+                  (s) => s.id === e.target.value,
+                );
+                if (selected) {
+                  setFilter({ ...emptyFilter, ...selected.filter });
+                  setTitle(selected.title);
+                }
+              }}
+            >
+              <option value="">Оберіть пошук</option>
+              {client.savedSearches.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor={`request-title-${client.id}`}>Назва запиту</label>
           <input
-            placeholder="Ім'я клієнта"
-            value={clientForm.name}
-            onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+            id={`request-title-${client.id}`}
+            name="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={200}
             required
           />
-          <input
-            placeholder="Контакти (телефон, email)"
-            value={clientForm.contactInfo}
-            onChange={(e) => setClientForm({ ...clientForm, contactInfo: e.target.value })}
-            required
-          />
-          <select
-            value={clientForm.type}
-            onChange={(e) => setClientForm({ ...clientForm, type: e.target.value })}
+        </div>
+        <SearchFilterFields
+          value={filter}
+          onChange={setFilter}
+          prefix={`request-${client.id}`}
+        />
+        {error && (
+          <p role="alert" className="notice-error">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="btn btn-success" disabled={busy}>
+          Зберегти запит
+        </button>
+      </form>
+    </details>
+  );
+}
+export default function ClientsPage() {
+  const { user } = useAuth();
+  const [clients, setClients] = useState([]);
+  const [agents, setAgents] = useState([]);
+  const [form, setForm] = useState(blank);
+  const [editing, setEditing] = useState(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [matches, setMatches] = useState(null);
+  async function load() {
+    const [data, staff] = await Promise.all([
+      agencyApi.getClients(),
+      user.role === "manager" ? agencyApi.getAgents() : Promise.resolve([]),
+    ]);
+    setClients(data);
+    setAgents(staff);
+  }
+  useEffect(() => {
+    load().catch((error) => setError(error.message));
+  }, []);
+  async function act(work) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await work();
+      await load();
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main>
+      <h1>{user.role === "manager" ? "Клієнти агентства" : "Мої клієнти"}</h1>
+      {error && (
+        <p role="alert" className="notice-error">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p role="status" className="notice-success">
+          {message}
+        </p>
+      )}
+      <div className="main-grid">
+        <section className="panel" aria-labelledby="client-form-title">
+          <h2 id="client-form-title">
+            {editing ? "Редагувати клієнта" : "Додати клієнта"}
+          </h2>
+          <form
+            action={editing ? `/api/clients/${editing}` : "/api/clients"}
+            method="post"
+            onSubmit={(e) => {
+              e.preventDefault();
+              act(async () => {
+                const dto = { ...form, type: Number(form.type) };
+                if (editing) await agencyApi.updateClient(editing, dto);
+                else await agencyApi.createClient(dto);
+                setForm(blank);
+                setEditing(null);
+                setMessage("Дані клієнта збережено.");
+              });
+            }}
+            className="form-stack"
+            aria-labelledby="client-form-title"
           >
-            <option value="1">Роль: Покупець</option>
-            <option value="2">Роль: Орендар</option>
-            <option value="3">Роль: Власник</option>
-          </select>
-          <button type="submit" className="btn btn-primary">+ Додати клієнта</button>
-        </form>
-      </div>
-
-      <div>
-        <h3 style={{ marginTop: 0 }}>Клієнти агентства ({clients.length})</h3>
-        <div className="card-list">
-          {clients.map((c) => (
-            <div key={c.id} className="item-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <span
-                    className="status-badge"
-                    style={{ backgroundColor: CLIENT_TYPE_COLORS[c.type] || "#64748b", marginRight: 8, padding: "3px 8px", borderRadius: 4, color: "#fff", fontSize: 12 }}
-                  >
-                    {CLIENT_TYPE_NAMES[c.type] || "Клієнт"}
-                  </span>
-                  <strong style={{ fontSize: 18 }}>{c.name}</strong>
-                  <span className="text-muted" style={{ marginLeft: 10 }}>({c.contactInfo})</span>
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => setRequestModalClient(c)} className="btn btn-secondary" style={{ padding: "4px 8px" }}>
-                    + Запит
-                  </button>
-                  <button onClick={() => handleDeleteClient(c.id)} className="btn btn-danger" style={{ padding: "4px 8px" }}>
-                    Видалити
-                  </button>
-                </div>
-              </div>
-
-              {c.savedSearches?.length > 0 && (
-                <div style={{ marginTop: 10, fontSize: 13, background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                  <b>Збережені пошуки ({c.savedSearches.length}):</b>
-                  <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
-                    {c.savedSearches.map((s, idx) => (
-                      <li key={idx}><i>{s.title}</i></li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {c.requests?.length > 0 && (
-                <div style={{ marginTop: 8, fontSize: 13, background: "#f0fdf4", padding: 8, borderRadius: 6, border: "1px solid #bbf7d0" }}>
-                  <b>Запити клієнта ({c.requests.length}):</b>
-                  <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
-                    {c.requests.map((r, idx) => (
-                      <li key={idx}>
-                        <b>{r.title}</b> <span className="text-muted" style={{ fontSize: 11 }}>(від {new Date(r.createdAt).toLocaleDateString()})</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <div className="field">
+              <label htmlFor="client-name">Ім’я — обов’язково</label>
+              <input
+                id="client-name"
+                name="name"
+                autoComplete="name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                maxLength={200}
+                required
+              />
             </div>
+            <div className="field">
+              <label htmlFor="client-contact">Контакти — обов’язково</label>
+              <input
+                id="client-contact"
+                name="contactInfo"
+                value={form.contactInfo}
+                onChange={(e) =>
+                  setForm({ ...form, contactInfo: e.target.value })
+                }
+                maxLength={2000}
+                required
+              />
+            </div>
+            <fieldset>
+              <legend>Тип клієнта</legend>
+              {Object.entries(types).map(([value, label]) => (
+                <label key={value} className="radio-label">
+                  <input
+                    type="radio"
+                    name="type"
+                    checked={Number(form.type) === Number(value)}
+                    onChange={() => setForm({ ...form, type: Number(value) })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </fieldset>
+            {user.role === "manager" && (
+              <div className="field">
+                <label htmlFor="client-agent">Відповідальний агент</label>
+                <select
+                  id="client-agent"
+                  name="agentId"
+                  value={form.agentId}
+                  onChange={(e) =>
+                    setForm({ ...form, agentId: e.target.value })
+                  }
+                >
+                  <option value="">Ще не призначено</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              Зберегти клієнта
+            </button>
+            {editing && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setEditing(null);
+                  setForm(blank);
+                }}
+              >
+                Скасувати редагування
+              </button>
+            )}
+          </form>
+        </section>
+        <div className="card-list">
+          <h2>Записів: {clients.length}</h2>
+          {clients.map((client) => (
+            <article className="panel" key={client.id}>
+              <h3>
+                {client.name} · {types[client.type]}
+              </h3>
+              <p>{client.contactInfo}</p>
+              <p className="text-muted">
+                {client.agentId
+                  ? agents.find((a) => a.id === client.agentId)?.name ||
+                    "Агент призначений"
+                  : "Агент ще не призначений"}
+              </p>
+              <div className="nav-tabs">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setEditing(client.id);
+                    setForm({
+                      name: client.name,
+                      contactInfo: client.contactInfo,
+                      type: client.type,
+                      agentId: client.agentId || "",
+                    });
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                >
+                  Редагувати
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={busy}
+                  onClick={() => act(() => agencyApi.deleteClient(client.id))}
+                >
+                  Видалити
+                </button>
+              </div>
+              <h4>Збережені пошуки ({client.savedSearches.length})</h4>
+              <ul>
+                {client.savedSearches.map((s) => (
+                  <li key={s.id}>{s.title}</li>
+                ))}
+              </ul>
+              <h4>Запити</h4>
+              {client.requests.map((r) => (
+                <div className="portal-row" key={r.id}>
+                  <span>{r.title}</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() =>
+                      act(async () =>
+                        setMatches({
+                          id: r.id,
+                          rows: await agencyApi.getRequestMatches(r.id),
+                        }),
+                      )
+                    }
+                  >
+                    Підібрати об’єкти
+                  </button>
+                </div>
+              ))}
+              {matches && client.requests.some((r) => r.id === matches.id) && (
+                <p role="status">
+                  Знайдено: {matches.rows.length}.{" "}
+                  {matches.rows
+                    .map((p) => `${p.type}, ${p.address}, $${p.price}`)
+                    .join("; ")}
+                </p>
+              )}
+              <RequestEditor client={client} onCreated={load} />
+            </article>
           ))}
         </div>
       </div>
-
-      {requestModalClient && (
-        <div className="modal-backdrop" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" }}>
-          <div className="modal-content panel" style={{ maxWidth: 400, background: "#fff", padding: 20, borderRadius: 8 }}>
-            <h3>Створити запит для: {requestModalClient.name}</h3>
-            <form onSubmit={handleCreateRequest} className="form-stack" style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 15 }}>
-              <input
-                placeholder="Назва запиту (напр. 2-кімнатна до $50k)"
-                value={requestTitle}
-                onChange={(e) => setRequestTitle(e.target.value)}
-                required
-                style={{ padding: 8 }}
-              />
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
-                <button type="button" onClick={() => setRequestModalClient(null)} className="btn btn-secondary" style={{ padding: "6px 12px" }}>
-                  Скасувати
-                </button>
-                <button type="submit" className="btn btn-success" style={{ padding: "6px 12px" }}>Зберегти</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </main>
   );
 }

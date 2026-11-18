@@ -1,26 +1,13 @@
-const API_URL = "/api";
-
-async function request(endpoint, options = {}) {
-  const res = await fetch(`${API_URL}${endpoint}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    throw new Error("API недоступне. Перевірте запуск сервера або налаштування Netlify.");
-  }
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || "Помилка запиту до сервера");
-  }
-  return data;
-}
+import { request } from "./http";
 
 export const agencyApi = {
   // Нерухомість
   getProperties: () => request("/properties"),
   searchProperties: (filter) =>
-    request("/properties/search", { method: "POST", body: JSON.stringify(filter) }),
+    request("/properties/search", {
+      method: "POST",
+      body: JSON.stringify(filter),
+    }),
   createProperty: (dto) =>
     request("/properties", { method: "POST", body: JSON.stringify(dto) }),
   changePropertyStatus: (id, newStatus, comment) =>
@@ -35,6 +22,13 @@ export const agencyApi = {
   createClient: (dto) =>
     request("/clients", { method: "POST", body: JSON.stringify(dto) }),
   deleteClient: (id) => request(`/clients/${id}`, { method: "DELETE" }),
+  updateClient: (id, dto) =>
+    request(`/clients/${id}`, { method: "PUT", body: JSON.stringify(dto) }),
+  getClientHistory: (id) => request(`/clients/${id}/history`),
+  getRequestMatches: (id) => request(`/requests/${id}/matches`),
+  getUsers: () => request("/users"),
+  updateUserRole: (id, dto) =>
+    request(`/users/${id}`, { method: "PATCH", body: JSON.stringify(dto) }),
   saveClientSearch: (clientId, title, filter) =>
     request(`/clients/${clientId}/searches`, {
       method: "POST",
@@ -50,7 +44,9 @@ export const agencyApi = {
   createDeal: (dto) =>
     request("/deals", { method: "POST", body: JSON.stringify(dto) }),
   cancelDeal: (id, reason) =>
-    request(`/deals/${id}?reason=${encodeURIComponent(reason)}`, { method: "DELETE" }),
+    request(`/deals/${id}?reason=${encodeURIComponent(reason)}`, {
+      method: "DELETE",
+    }),
 
   // Аналітика
   getAnalytics: (startDate = "", endDate = "") => {
@@ -61,8 +57,14 @@ export const agencyApi = {
   },
 
   createClientRequest: (clientId, requestDto) =>
-    request(`/clients/${clientId}/requests`, { method: "POST", body: JSON.stringify(requestDto) }),
+    request(`/clients/${clientId}/requests`, {
+      method: "POST",
+      body: JSON.stringify(requestDto),
+    }),
 
   updateProperty: (id, propertyDto) =>
-    request(`/properties/${id}`, { method: "PUT", body: JSON.stringify(propertyDto) }),
+    request(`/properties/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(propertyDto),
+    }),
 };

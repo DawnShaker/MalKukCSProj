@@ -7,6 +7,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
     public class Property
     {
         public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid? AgentId { get; set; }
         public string Type { get; set; } = string.Empty;
         public double Area { get; set; }
         public string Address { get; set; } = string.Empty;

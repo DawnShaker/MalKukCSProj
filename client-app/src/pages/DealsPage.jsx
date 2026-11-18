@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { agencyApi } from "../api/agencyApi";
+import { useAuth } from "../auth/AuthContext";
 
 const INITIAL_DEAL_FORM = {
   propertyId: "",
@@ -11,6 +12,7 @@ const INITIAL_DEAL_FORM = {
 };
 
 export default function DealsPage() {
+  const { user } = useAuth();
   const [properties, setProperties] = useState([]);
   const [clients, setClients] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -96,54 +98,135 @@ export default function DealsPage() {
       <div className="card-list">
         <form onSubmit={handleCreateDeal} className="panel form-stack">
           <h3>Укласти нову угоду</h3>
-          <select value={dealForm.propertyId} onChange={(e) => setDealForm({ ...dealForm, propertyId: e.target.value })} required>
+          <select
+            value={dealForm.propertyId}
+            onChange={(e) =>
+              setDealForm({ ...dealForm, propertyId: e.target.value })
+            }
+            required
+          >
             <option value="">-- Оберіть об'єкт --</option>
-            {properties.filter((p) => p.status !== 4).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.type} ({p.address}) - ${p.price}
+            {properties
+              .filter((p) => p.status !== 4)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.type} ({p.address}) - ${p.price}
+                </option>
+              ))}
+          </select>
+          <select
+            value={dealForm.clientId}
+            onChange={(e) =>
+              setDealForm({ ...dealForm, clientId: e.target.value })
+            }
+            required
+          >
+            <option value="">-- Оберіть клієнта --</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </select>
-          <select value={dealForm.clientId} onChange={(e) => setDealForm({ ...dealForm, clientId: e.target.value })} required>
-            <option value="">-- Оберіть клієнта --</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <select value={dealForm.agentId} onChange={(e) => setDealForm({ ...dealForm, agentId: e.target.value })} required>
+          <select
+            value={dealForm.agentId}
+            onChange={(e) =>
+              setDealForm({ ...dealForm, agentId: e.target.value })
+            }
+            required
+          >
             <option value="">-- Оберіть рієлтора --</option>
             {agents.map((a) => (
-              <option key={a.id} value={a.id}>{a.name} ({a.experienceYears} р.)</option>
+              <option key={a.id} value={a.id}>
+                {a.name} ({a.experienceYears} р.)
+              </option>
             ))}
           </select>
-          <select value={dealForm.dealType} onChange={(e) => setDealForm({ ...dealForm, dealType: e.target.value })}>
+          <select
+            value={dealForm.dealType}
+            onChange={(e) =>
+              setDealForm({ ...dealForm, dealType: e.target.value })
+            }
+          >
             <option value="1">Тип угоди: Купівля</option>
             <option value="2">Тип угоди: Оренда</option>
           </select>
-          <input type="number" placeholder="Сума угоди ($)" value={dealForm.price} onChange={(e) => setDealForm({ ...dealForm, price: e.target.value })} required />
-          <input type="number" placeholder="Комісія рієлтора (%)" value={dealForm.commission} onChange={(e) => setDealForm({ ...dealForm, commission: e.target.value })} required />
+          <input
+            type="number"
+            placeholder="Сума угоди ($)"
+            value={dealForm.price}
+            onChange={(e) =>
+              setDealForm({ ...dealForm, price: e.target.value })
+            }
+            required
+          />
+          <input
+            type="number"
+            placeholder="Комісія рієлтора (%)"
+            value={dealForm.commission}
+            onChange={(e) =>
+              setDealForm({ ...dealForm, commission: e.target.value })
+            }
+            required
+          />
           <div style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>
-            Комісія агентства: ${((Number(dealForm.price || 0) * Number(dealForm.commission || 0)) / 100).toFixed(2)}
+            Комісія агентства: $
+            {(
+              (Number(dealForm.price || 0) * Number(dealForm.commission || 0)) /
+              100
+            ).toFixed(2)}
           </div>
-          <button type="submit" className="btn btn-success">Оформити угоду</button>
+          <button type="submit" className="btn btn-success">
+            Оформити угоду
+          </button>
         </form>
 
-        <form onSubmit={handleCreateAgent} className="panel form-stack">
-          <h3>Рієлтори агентства</h3>
-          <input placeholder="Ім'я рієлтора" value={agentForm.name} onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })} required />
-          <input type="number" placeholder="Досвід (років)" value={agentForm.experienceYears} onChange={(e) => setAgentForm({ ...agentForm, experienceYears: e.target.value })} required />
-          <button type="submit" className="btn btn-primary">+ Додати рієлтора</button>
-          <div style={{ marginTop: 8 }}>
-            {agents.map((a) => (
-              <div key={a.id} className="stat-row" style={{ alignItems: "center" }}>
-                <span>{a.name} ({a.experienceYears} р.)</span>
-                <button type="button" onClick={() => handleDeleteAgent(a.id)} className="btn btn-danger" style={{ padding: "4px 8px" }}>
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        </form>
+        {user.role === "manager" && (
+          <form onSubmit={handleCreateAgent} className="panel form-stack">
+            <h3>Рієлтори агентства</h3>
+            <input
+              placeholder="Ім'я рієлтора"
+              value={agentForm.name}
+              onChange={(e) =>
+                setAgentForm({ ...agentForm, name: e.target.value })
+              }
+              required
+            />
+            <input
+              type="number"
+              placeholder="Досвід (років)"
+              value={agentForm.experienceYears}
+              onChange={(e) =>
+                setAgentForm({ ...agentForm, experienceYears: e.target.value })
+              }
+              required
+            />
+            <button type="submit" className="btn btn-primary">
+              + Додати рієлтора
+            </button>
+            <div style={{ marginTop: 8 }}>
+              {agents.map((a) => (
+                <div
+                  key={a.id}
+                  className="stat-row"
+                  style={{ alignItems: "center" }}
+                >
+                  <span>
+                    {a.name} ({a.experienceYears} р.)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAgent(a.id)}
+                    className="btn btn-danger"
+                    style={{ padding: "4px 8px" }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </form>
+        )}
       </div>
 
       <div>
@@ -152,11 +235,20 @@ export default function DealsPage() {
           {deals.map((d) => (
             <div key={d.id} className="item-card">
               <div>
-                <strong>Сума: ${d.totalCost.toLocaleString()}</strong> | Комісія:{" "}
-                <b>{d.commissionPercent}% (${((d.totalCost * d.commissionPercent) / 100).toFixed(2)})</b>
-                <div className="text-muted">Дата: {new Date(d.date).toLocaleString()}</div>
+                <strong>Сума: ${d.totalCost.toLocaleString()}</strong> |
+                Комісія:{" "}
+                <b>
+                  {d.commissionPercent}% ($
+                  {((d.totalCost * d.commissionPercent) / 100).toFixed(2)})
+                </b>
+                <div className="text-muted">
+                  Дата: {new Date(d.date).toLocaleString()}
+                </div>
               </div>
-              <button onClick={() => handleCancelDeal(d.id)} className="btn btn-danger">
+              <button
+                onClick={() => handleCancelDeal(d.id)}
+                className="btn btn-danger"
+              >
                 Розірвати договір
               </button>
             </div>

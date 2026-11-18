@@ -4,6 +4,9 @@ namespace RealEstateAgency.PersistenceLayer.Entities
 {
     public class PriceHistoryEntry
     {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid PropertyId { get; set; }
+        public int Position { get; set; }
         public DateTime ChangedAt { get; set; } = DateTime.Now;
         public decimal OldPrice { get; set; }
         public decimal NewPrice { get; set; }

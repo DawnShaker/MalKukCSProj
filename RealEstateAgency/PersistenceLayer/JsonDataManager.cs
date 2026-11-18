@@ -7,7 +7,7 @@ using System.Text.Unicode;
 
 namespace RealEstateAgency.PersistenceLayer
 {
-    public class JsonDataManager
+    public class JsonDataManager : IAgencyDataManager
     {
         private readonly string _filePath;
         private readonly JsonSerializerOptions _options;

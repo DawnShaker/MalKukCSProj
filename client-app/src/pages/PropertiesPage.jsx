@@ -1,11 +1,24 @@
 import { useState, useEffect } from "react";
 import { agencyApi } from "../api/agencyApi";
 import StatusHistoryModal from "../components/StatusHistoryModal";
+import { useAuth } from "../auth/AuthContext";
+import SearchFilterFields from "../components/SearchFilterFields";
 
-const STATUS_NAMES = { 1: "На продаж", 2: "Оренда", 3: "Заброньовано", 4: "Продано" };
-const STATUS_COLORS = { 1: "#16a34a", 2: "#2563eb", 3: "#d97706", 4: "#dc2626" };
+const STATUS_NAMES = {
+  1: "На продаж",
+  2: "Оренда",
+  3: "Заброньовано",
+  4: "Продано",
+};
+const STATUS_COLORS = {
+  1: "#16a34a",
+  2: "#2563eb",
+  3: "#d97706",
+  4: "#dc2626",
+};
 
 const INITIAL_PROP_FORM = {
+  agentId: "",
   type: "",
   rooms: "",
   yearBuilt: "",
@@ -33,6 +46,9 @@ const INITIAL_FILTER = {
 };
 
 export default function PropertiesPage() {
+  const { user } = useAuth();
+  const staff = user.role !== "client";
+  const [agents, setAgents] = useState([]);
   const [properties, setProperties] = useState([]);
   const [clients, setClients] = useState([]);
   const [alertBanner, setAlertBanner] = useState([]);
@@ -44,17 +60,19 @@ export default function PropertiesPage() {
   // Стан для відстеження режиму редагування
   const [editingId, setEditingId] = useState(null);
 
-  const [saveSearchClient, setSaveSearchClient] = useState("");
+  const [saveSearchClient, setSaveSearchClient] = useState(user.clientId || "");
   const [saveSearchTitle, setSaveSearchTitle] = useState("");
 
   const loadData = async () => {
     try {
-      const [propsData, clientsData] = await Promise.all([
+      const [propsData, clientsData, agentsData] = await Promise.all([
         agencyApi.getProperties(),
         agencyApi.getClients(),
+        user.role === "manager" ? agencyApi.getAgents() : Promise.resolve([]),
       ]);
       setProperties(propsData);
       setClients(clientsData);
+      setAgents(agentsData);
     } catch (err) {
       alert(err.message);
     }
@@ -87,7 +105,7 @@ export default function PropertiesPage() {
         const data = await agencyApi.createProperty(payload);
         if (data.notifications?.length > 0) setAlertBanner(data.notifications);
       }
-      
+
       setPropForm(INITIAL_PROP_FORM);
       loadData();
     } catch (err) {
@@ -99,6 +117,7 @@ export default function PropertiesPage() {
   const handleStartEdit = (p) => {
     setEditingId(p.id);
     setPropForm({
+      agentId: p.agentId || "",
       type: p.type,
       rooms: p.rooms,
       yearBuilt: p.yearBuilt,
@@ -118,7 +137,10 @@ export default function PropertiesPage() {
   };
 
   const handleChangeStatus = async (id, newStatus) => {
-    const comment = prompt("Коментар до зміни статусу:", "Зміна статусу через веб-інтерфейс");
+    const comment = prompt(
+      "Коментар до зміни статусу:",
+      "Зміна статусу через веб-інтерфейс",
+    );
     if (comment === null) return;
     try {
       await agencyApi.changePropertyStatus(id, newStatus, comment);
@@ -172,11 +194,11 @@ export default function PropertiesPage() {
       await agencyApi.saveClientSearch(
         saveSearchClient,
         saveSearchTitle || "Збережений фільтр",
-        buildCleanFilter()
+        buildCleanFilter(),
       );
       alert("Пошук збережено в профілі клієнта!");
       setSaveSearchTitle("");
-      setSaveSearchClient("");
+      setSaveSearchClient(user.clientId || "");
     } catch (err) {
       alert(err.message);
     }
@@ -186,13 +208,18 @@ export default function PropertiesPage() {
     <>
       {alertBanner.length > 0 && (
         <div className="alert-banner">
-          <strong>Сповіщення системи про нові об'єкти за підписками клієнтів:</strong>
+          <strong>
+            Сповіщення системи про нові об'єкти за підписками клієнтів:
+          </strong>
           <ul>
             {alertBanner.map((msg, idx) => (
               <li key={idx}>{msg}</li>
             ))}
           </ul>
-          <button className="btn btn-secondary" onClick={() => setAlertBanner([])}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setAlertBanner([])}
+          >
             Закрити
           </button>
         </div>
@@ -200,139 +227,293 @@ export default function PropertiesPage() {
 
       <div className="main-grid">
         <div className="panel">
-          <h3>{editingId ? "Редагувати об'єкт" : "Додати об'єкт"}</h3>
-          <form onSubmit={handleFormSubmit} className="form-stack">
-            <input placeholder="Тип (Квартира / Будинок / Офіс)" value={propForm.type} onChange={(e) => setPropForm({ ...propForm, type: e.target.value })} required />
-            <input placeholder="Район (напр. Центр, Поділ)" value={propForm.district} onChange={(e) => setPropForm({ ...propForm, district: e.target.value })} required />
-            <input placeholder="Адреса (вул. Нова, 10)" value={propForm.address} onChange={(e) => setPropForm({ ...propForm, address: e.target.value })} required />
-            <input placeholder="Орієнтири (метро, парк)" value={propForm.landmark} onChange={(e) => setPropForm({ ...propForm, landmark: e.target.value })} required />
-            <div className="two-col">
-              <input type="number" placeholder="Кімнат" value={propForm.rooms} onChange={(e) => setPropForm({ ...propForm, rooms: e.target.value })} required />
-              <input type="number" placeholder="Рік (напр. 2023)" value={propForm.yearBuilt} onChange={(e) => setPropForm({ ...propForm, yearBuilt: e.target.value })} required />
-            </div>
-            <div className="two-col">
-              <input type="number" placeholder="Площа (м²)" value={propForm.area} onChange={(e) => setPropForm({ ...propForm, area: e.target.value })} required />
-              <input type="number" placeholder="Ціна ($)" value={propForm.price} onChange={(e) => setPropForm({ ...propForm, price: e.target.value })} required />
-            </div>
-            <select value={propForm.status} onChange={(e) => setPropForm({ ...propForm, status: e.target.value })}>
-              <option value="1">Статус: На продаж</option>
-              <option value="2">Статус: Оренда</option>
-              <option value="3">Статус: Заброньовано</option>
-              <option value="4">Статус: Продано</option>
-            </select>
+          {staff && (
+            <>
+              <h3>{editingId ? "Редагувати об'єкт" : "Додати об'єкт"}</h3>
+              <form
+                action="/api/properties"
+                method="post"
+                onSubmit={handleFormSubmit}
+                className="form-stack"
+              >
+                {[
+                  ["type", "Тип нерухомості"],
+                  ["district", "Район"],
+                  ["address", "Адреса"],
+                  ["landmark", "Орієнтири"],
+                  ["rooms", "Кількість кімнат", "number"],
+                  ["yearBuilt", "Рік побудови", "number"],
+                  ["area", "Площа, м²", "number"],
+                  ["price", "Ціна, $", "number"],
+                ].map(([key, label, type]) => (
+                  <div className="field" key={key}>
+                    <label htmlFor={`property-${key}`}>
+                      {label} — обов’язково
+                    </label>
+                    <input
+                      id={`property-${key}`}
+                      name={key}
+                      type={type || "text"}
+                      value={propForm[key]}
+                      onChange={(e) =>
+                        setPropForm({ ...propForm, [key]: e.target.value })
+                      }
+                      min={
+                        key === "yearBuilt"
+                          ? 1800
+                          : key === "rooms"
+                            ? 1
+                            : type === "number"
+                              ? 0.01
+                              : undefined
+                      }
+                      step={["area", "price"].includes(key) ? "any" : undefined}
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+                ))}
+                <label htmlFor="property-status">Статус</label>
+                <select
+                  id="property-status"
+                  name="status"
+                  value={propForm.status}
+                  onChange={(e) =>
+                    setPropForm({ ...propForm, status: e.target.value })
+                  }
+                >
+                  <option value="1">Статус: На продаж</option>
+                  <option value="2">Статус: Оренда</option>
+                  <option value="3">Статус: Заброньовано</option>
+                  <option value="4">Статус: Продано</option>
+                </select>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button type="submit" className="btn btn-success" style={{ flex: 1 }}>
-                {editingId ? "Зберегти зміни" : "+ Додати об'єкт"}
-              </button>
-              {editingId && (
-                <button type="button" onClick={handleCancelEdit} className="btn btn-secondary" style={{ padding: "8px 12px" }}>
-                  Скасувати
-                </button>
-              )}
-            </div>
-          </form>
+                {user.role === "manager" && (
+                  <div className="field">
+                    <label htmlFor="property-agent">Відповідальний агент</label>
+                    <select
+                      id="property-agent"
+                      name="agentId"
+                      value={propForm.agentId}
+                      onChange={(e) =>
+                        setPropForm({ ...propForm, agentId: e.target.value })
+                      }
+                    >
+                      <option value="">Ще не призначено</option>
+                      {agents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-          <hr style={{ margin: "20px 0", borderColor: "#e2e8f0" }} />
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    type="submit"
+                    className="btn btn-success"
+                    style={{ flex: 1 }}
+                  >
+                    {editingId ? "Зберегти зміни" : "+ Додати об'єкт"}
+                  </button>
+                  {editingId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="btn btn-secondary"
+                      style={{ padding: "8px 12px" }}
+                    >
+                      Скасувати
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              <hr style={{ margin: "20px 0", borderColor: "#e2e8f0" }} />
+            </>
+          )}
           <h3>Комбінований фільтр</h3>
           <div className="form-stack">
-            <input placeholder="Тип (Квартира / Будинок / Офіс)" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })} />
-            <input placeholder="Район (Центр, Поділ...)" value={filter.district} onChange={(e) => setFilter({ ...filter, district: e.target.value })} />
-            <input placeholder="Адреса (вулиця або номер)" value={filter.address} onChange={(e) => setFilter({ ...filter, address: e.target.value })} />
-            <input placeholder="Орієнтир поруч (метро, парк...)" value={filter.landmark} onChange={(e) => setFilter({ ...filter, landmark: e.target.value })} />
-            <div className="two-col">
-              <input type="number" placeholder="Кімнат" value={filter.rooms} onChange={(e) => setFilter({ ...filter, rooms: e.target.value })} />
-              <select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
-                <option value="">Всі статуси</option>
-                <option value="1">На продаж</option>
-                <option value="2">Оренда</option>
-                <option value="3">Заброньовано</option>
-                <option value="4">Продано</option>
-              </select>
-            </div>
-            <div className="two-col">
-              <input type="number" placeholder="Площа від (м²)" value={filter.minArea} onChange={(e) => setFilter({ ...filter, minArea: e.target.value })} />
-              <input type="number" placeholder="Площа до (м²)" value={filter.maxArea} onChange={(e) => setFilter({ ...filter, maxArea: e.target.value })} />
-            </div>
-            <div className="two-col">
-              <input type="number" placeholder="Ціна від ($)" value={filter.minPrice} onChange={(e) => setFilter({ ...filter, minPrice: e.target.value })} />
-              <input type="number" placeholder="Ціна до ($)" value={filter.maxPrice} onChange={(e) => setFilter({ ...filter, maxPrice: e.target.value })} />
-            </div>
-            <div className="two-col">
-              <input type="number" placeholder="Рік від" value={filter.minYearBuilt} onChange={(e) => setFilter({ ...filter, minYearBuilt: e.target.value })} />
-              <input type="number" placeholder="Рік до" value={filter.maxYearBuilt} onChange={(e) => setFilter({ ...filter, maxYearBuilt: e.target.value })} />
-            </div>
-            <div className="two-col">
-              <button onClick={handleSearch} className="btn btn-primary">Знайти</button>
-              <button onClick={handleResetFilter} className="btn btn-secondary">Скинути</button>
-            </div>
+            <search>
+              <form
+                action="/api/properties/search"
+                method="post"
+                className="form-stack"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSearch();
+                }}
+              >
+                <SearchFilterFields
+                  value={filter}
+                  onChange={setFilter}
+                  prefix="catalog"
+                  includeClosed={staff}
+                />
+                <div className="two-col">
+                  <button type="submit" className="btn btn-primary">
+                    Знайти
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetFilter}
+                    className="btn btn-secondary"
+                  >
+                    Скинути
+                  </button>
+                </div>
+              </form>
+            </search>
 
             <div className="sub-box">
-              <strong>Зберегти пошук клієнту:</strong>
+              <strong>
+                {staff ? "Зберегти пошук клієнту:" : "Зберегти мій пошук:"}
+              </strong>
               <div className="form-stack" style={{ marginTop: 8 }}>
-                <select value={saveSearchClient} onChange={(e) => setSaveSearchClient(e.target.value)}>
+                <select
+                  value={saveSearchClient}
+                  onChange={(e) => setSaveSearchClient(e.target.value)}
+                >
                   <option value="">-- Оберіть клієнта --</option>
                   {clients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
                   ))}
                 </select>
-                <input placeholder="Назва підписки" value={saveSearchTitle} onChange={(e) => setSaveSearchTitle(e.target.value)} />
-                <button onClick={handleSaveClientSearch} className="btn btn-dark">Зберегти пошук</button>
+                <input
+                  placeholder="Назва підписки"
+                  value={saveSearchTitle}
+                  onChange={(e) => setSaveSearchTitle(e.target.value)}
+                />
+                <button
+                  onClick={handleSaveClientSearch}
+                  className="btn btn-dark"
+                >
+                  Зберегти пошук
+                </button>
               </div>
             </div>
           </div>
         </div>
 
         <div>
-          <h3 style={{ marginTop: 0 }}>Каталог об'єктів ({properties.length})</h3>
+          <h3 style={{ marginTop: 0 }}>
+            Каталог об'єктів ({properties.length})
+          </h3>
           <div className="card-list">
             {properties.map((p) => (
-              <div key={p.id} className="item-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <span className="status-badge" style={{ backgroundColor: STATUS_COLORS[p.status] }}>
+              <div
+                key={p.id}
+                className="item-card"
+                style={{ flexDirection: "column", alignItems: "stretch" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      className="status-badge"
+                      style={{ backgroundColor: STATUS_COLORS[p.status] }}
+                    >
                       {STATUS_NAMES[p.status]}
                     </span>
                     <strong style={{ fontSize: 18 }}>
                       {p.type} ({p.rooms} кімн., {p.area} м², {p.yearBuilt} р.)
                     </strong>
-                    <span className="price-tag">${p.price.toLocaleString()}</span>
-                    <span className="text-muted">(${Math.round(p.price / p.area)}/м²)</span>
+                    <span className="price-tag">
+                      ${p.price.toLocaleString()}
+                    </span>
+                    <span className="text-muted">
+                      (${Math.round(p.price / p.area)}/м²)
+                    </span>
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <select value={p.status} onChange={(e) => handleChangeStatus(p.id, e.target.value)} style={{ width: 130 }}>
-                      <option value="1">На продаж</option>
-                      <option value="2">Оренда</option>
-                      <option value="3">Заброньовано</option>
-                      <option value="4">Продано</option>
-                    </select>
-                    {/* Кнопка редагування об'єкта */}
-                    <button onClick={() => handleStartEdit(p)} className="btn btn-primary" style={{ padding: "4px 8px", fontSize: 13 }}>
-                      Редагувати
-                    </button>
-                    <button onClick={() => setHistoryModal(p)} className="btn btn-secondary">
-                      Історія ({p.statusHistory?.length || 0})
-                    </button>
-                    <button onClick={() => handleDeleteProperty(p.id)} className="btn btn-danger">
-                      Видалити
-                    </button>
-                  </div>
+                  {staff && (
+                    <div
+                      className="record-actions"
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    >
+                      <select
+                        value={p.status}
+                        onChange={(e) =>
+                          handleChangeStatus(p.id, e.target.value)
+                        }
+                        style={{ width: 130 }}
+                      >
+                        <option value="1">На продаж</option>
+                        <option value="2">Оренда</option>
+                        <option value="3">Заброньовано</option>
+                        <option value="4">Продано</option>
+                      </select>
+                      {/* Кнопка редагування об'єкта */}
+                      <button
+                        onClick={() => handleStartEdit(p)}
+                        className="btn btn-primary"
+                        style={{ padding: "4px 8px", fontSize: 13 }}
+                      >
+                        Редагувати
+                      </button>
+                      <button
+                        onClick={() => setHistoryModal(p)}
+                        className="btn btn-secondary"
+                      >
+                        Історія ({p.statusHistory?.length || 0})
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProperty(p.id)}
+                        className="btn btn-danger"
+                      >
+                        Видалити
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-muted" style={{ marginTop: 6 }}>
-                  Район: <b>{p.district}</b> | Адреса: <b>{p.address}</b> | Орієнтири: <i>{p.landmark}</i>
+                  Район: <b>{p.district}</b> | Адреса: <b>{p.address}</b> |
+                  Орієнтири: <i>{p.landmark}</i>
                 </div>
 
                 {/* Блок динаміки цін */}
                 {p.priceHistory && p.priceHistory.length > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 12, background: "#f8fafc", padding: "6px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      background: "#f8fafc",
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
                     <b>Динаміка цін:</b>
                     <ul style={{ margin: "2px 0 0 16px", padding: 0 }}>
                       {p.priceHistory.map((ph, idx) => (
                         <li key={idx}>
-                          ${ph.oldPrice.toLocaleString()} ➔ <b style={{ color: "#16a34a" }}>${ph.newPrice.toLocaleString()}</b> 
-                          <span className="text-muted" style={{ fontSize: 11, marginLeft: 6 }}>
-                            ({new Date(ph.changedAt).toLocaleDateString()}) — <i>{ph.comment}</i>
+                          ${ph.oldPrice.toLocaleString()} ➔{" "}
+                          <b style={{ color: "#16a34a" }}>
+                            ${ph.newPrice.toLocaleString()}
+                          </b>
+                          <span
+                            className="text-muted"
+                            style={{ fontSize: 11, marginLeft: 6 }}
+                          >
+                            ({new Date(ph.changedAt).toLocaleDateString()}) —{" "}
+                            <i>{ph.comment}</i>
                           </span>
                         </li>
                       ))}
@@ -345,7 +526,10 @@ export default function PropertiesPage() {
         </div>
       </div>
 
-      <StatusHistoryModal property={historyModal} onClose={() => setHistoryModal(null)} />
+      <StatusHistoryModal
+        property={historyModal}
+        onClose={() => setHistoryModal(null)}
+      />
     </>
   );
 }

@@ -32,10 +32,10 @@ namespace RealEstateAgency.BusinessLogicLayer
 
     public class AgencyService
     {
-        private readonly JsonDataManager _dataManager;
+        private readonly IAgencyDataManager _dataManager;
         private AgencyDataContext _context;
 
-        public AgencyService(JsonDataManager dataManager)
+        public AgencyService(IAgencyDataManager dataManager)
         {
             _dataManager = dataManager;
             _context = _dataManager.LoadData();

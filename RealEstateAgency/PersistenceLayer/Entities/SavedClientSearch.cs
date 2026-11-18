@@ -5,6 +5,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
     public class SavedClientSearch
     {
         public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid ClientId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public string Title { get; set; } = string.Empty;
         public PropertySearchFilter Filter { get; set; } = new PropertySearchFilter();

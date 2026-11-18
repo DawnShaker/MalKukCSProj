@@ -8,6 +8,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
         public const int MaxSavedSearches = 10;
 
         public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid? AgentId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string ContactInfo { get; set; } = string.Empty;
         public ClientType Type { get; set; }

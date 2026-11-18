@@ -4,7 +4,13 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   background-color: #f1f5f9;
   color: #1e293b;
 }
@@ -255,4 +261,196 @@ select:focus {
   border-radius: 12px;
   max-width: 520px;
   width: 100%;
+}
+
+.auth-layout {
+  max-width: 65rem;
+  margin: 4rem auto;
+  padding: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+.auth-intro h1 {
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1.15;
+}
+.auth-intro p {
+  line-height: 1.7;
+}
+.eyebrow {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #2563eb;
+}
+.auth-panel {
+  padding: 2rem;
+}
+.auth-panel h2 {
+  margin-top: 0;
+}
+.field {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+.field label {
+  font-weight: 600;
+}
+.field input,
+.field select,
+.auth-panel input {
+  min-height: 3rem;
+  font: inherit;
+  font-size: max(1rem, 1em);
+  border-color: #767676;
+}
+.field input:user-invalid,
+.auth-panel input:user-invalid {
+  border-color: #b91c1c;
+}
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+.text-button {
+  min-height: 3rem;
+  background: none;
+  border: 0;
+  color: #1d4ed8;
+  text-align: start;
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.4rem 0;
+}
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.notice-error {
+  color: #991b1b;
+  background: #fef2f2;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+}
+.notice-success {
+  color: #166534;
+  background: #f0fdf4;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+}
+.portal-grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 24rem) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+.filter-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.portal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.portal-result {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.portal-result h3 {
+  margin-block: 0.3rem;
+}
+.save-filter {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+.radio-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 3rem;
+  margin-inline-end: 0.75rem;
+}
+.radio-label input {
+  width: auto;
+  accent-color: #2563eb;
+}
+.date-filter {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.date-filter .field {
+  margin: 0;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.record-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.main-grid > *,
+.portal-grid > * {
+  min-width: 0;
+}
+.item-card,
+.portal-row,
+.users-grid {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 800px) {
+  .auth-layout,
+  .portal-grid,
+  .main-grid,
+  .analytics-panels {
+    grid-template-columns: 1fr;
+  }
+  .auth-layout {
+    margin-block: 1rem;
+    gap: 1rem;
+  }
+  .auth-intro h1 {
+    margin-block: 0.5rem;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .app-container {
+    padding: 1rem;
+  }
+}
+@media (max-width: 420px) {
+  .filter-fields,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .auth-panel {
+    padding: 1rem;
+  }
 }

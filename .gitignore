@@ -9,6 +9,9 @@
 !.env.example
 .local/
 .netlify/
+*.db
+*.db-shm
+*.db-wal
 
 # User-specific files
 *.rsuser

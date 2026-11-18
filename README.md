@@ -1,84 +1,154 @@
 # Система управління рієлторським агентством
 
-Веб-версия для **Netlify + Supabase**: React/Vite → `/api/*` → Netlify Functions (JavaScript, Node.js) → Supabase PostgreSQL.
+Реализация этапов 1–6 учебного проекта. Проверка требований и архитектуры описана в [docs/project-stages.md](docs/project-stages.md).
 
-Исходный ASP.NET Core проект сохранён в `RealEstateAgency/`. Netlify-версия выполняет бизнес-логику из `server/agency.mjs`; отдельный хостинг .NET для неё не требуется. Изменения бизнес-правил в C# и JavaScript нужно согласовывать вручную.
+- **Веб-приложение:** React/Vite, Netlify Functions, Supabase Auth и таблицы PostgreSQL.
+- **C# приложение:** ASP.NET Core .NET 10, бизнес-логика и EF Core 10 с SQLite. Сохранение по умолчанию выполняется в БД, а JSON используется для импорта/экспорта.
 
-## Локальный запуск
+Netlify не запускает C# процесс: его HTTP API реализован в JavaScript. Вариант .NET позволяет запускать и проверять требуемый в задании EF Core локально. Оба варианта сохраняют исходные идентификаторы и бизнес-данные; изменения правил в них нужно согласовывать.
 
-Нужен Node.js 22 или новее; Netlify использует Node.js 24. Из корня репозитория:
+## Быстрый локальный запуск веб-версии
+
+Нужен Node.js 22 или новее. Из корня репозитория:
 
 ```powershell
+npm.cmd ci
 npm.cmd run build
 npm.cmd run dev
 ```
 
-Открыть <http://127.0.0.1:8888>. Сборка сама устанавливает клиентские зависимости по `client-app/package-lock.json`. На Linux/macOS используйте `npm` вместо `npm.cmd`.
+Открыть <http://127.0.0.1:8888>. На Linux/macOS используйте `npm` вместо `npm.cmd`.
 
-Без переменных Supabase локальный сервер использует `.local/agency_data.json`. При первом запуске данные берутся из исходного C# JSON; изменения сохраняются отдельно и не меняют оригинал. Путь с `#` поддерживается этим запуском собранной версии. После изменений React повторите `npm.cmd run build` и обновите страницу. `npm run dev` запускает API и раздачу собранного интерфейса, без HMR.
+Без настроек Supabase сервер запускает локальное демо на loopback-адресе. Данные берутся из `RealEstateAgency/agency_data.json` и сохраняются в игнорируемую папку `.local`, оригинал не изменяется. Демонстрационные аккаунты:
 
-Проверки:
+| Роль | Email | Пароль только локального демо |
+| --- | --- | --- |
+| Менеджер | `manager@example.test` | `local-demo-only` |
+| Агент | `agent@example.test` | `local-demo-only` |
+| Клиент | `client@example.test` | `local-demo-only` |
+
+Демо-авторизация не импортируется в Netlify Function и недоступна в production. При наличии настроек Supabase локальный сервер использует настоящие БД и Auth. `npm run dev` раздаёт собранный интерфейс без HMR; после изменения React повторите `npm.cmd --prefix client-app run build`. Такой запуск поддерживает Windows-путь с `#`.
+
+## Supabase: схема и перенос исходных данных
+
+Откройте **SQL Editor → New query** в своём проекте Supabase и выполните **весь [supabase/setup.sql](supabase/setup.sql)**. Он выполняет в одной транзакции:
+
+1. Создание таблиц, внешних ключей, ограничений, индексов и серверных функций.
+2. Перенос предыдущего облачного `agency_state`, если новая схема ещё пуста.
+3. Импорт отсутствующих записей из исходного файла: **12 объектов, 3 клиента, 3 агента, 2 сделки**, истории цен и статусов, поиски и уведомления.
+
+Существующие записи с тем же ID сохраняются без перезаписи. Повторный запуск не создаёт дубликатов. Старая таблица `agency_state` остаётся резервной копией и больше не используется новым API. При любой ошибке вся транзакция откатывается.
+
+Файл генерируется из исходных данных и миграции. После изменения исходного JSON обновите его:
 
 ```powershell
-npm.cmd test
+npm.cmd run db:prepare
 ```
 
-## Создание Supabase
+Отдельная миграция без встроенного набора данных: [202611180001_relational_accounts.sql](supabase/migrations/202611180001_relational_accounts.sql).
 
-1. Создайте проект в [Supabase Dashboard](https://supabase.com/dashboard), задайте пароль базы и дождитесь готовности.
-2. В **SQL Editor** выполните файл [202611170001_agency_state.sql](supabase/migrations/202611170001_agency_state.sql). Он создаёт таблицу и пустую запись агентства. Повторный запуск сохраняет существующие данные.
-3. В настройках проекта скопируйте **Project URL** и **Secret API key** (`sb_secret_…`). Поддерживается также прежний ключ `service_role`. Публичный `anon`/publishable key для этого сервера не подходит.
-4. Для локального подключения скопируйте `.env.example` в `.env` и замените примеры настоящими значениями:
+В исходном enum C# арендатор и владелец имели одинаковое значение `2`. Теперь `1` — покупатель, `2` — арендатор, `3` — владелец. Импорт сохраняет исходные значения; старые записи с `2` менеджеру нужно проверить и при необходимости исправить в интерфейсе.
+
+Ответственный агент выводится из существующей сделки, если связь однозначна. Остальные объекты и клиенты остаются непривязанными и доступны менеджеру для назначения агенту. Исходные даты, цены и идентификаторы не заменяются новыми.
+
+## Настройка настоящего Auth и production
+
+Для локального подключения создайте `.env` по `.env.example`. Для Netlify задайте те же имена в **Project configuration → Environment variables**, контекст **Production**:
 
 ```dotenv
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_your_server_key
-PORT=8888
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_public_key
+BOOTSTRAP_MANAGER_EMAIL=owner@example.com
 ```
 
-После перезапуска `npm.cmd run dev` будет использовать Supabase вместо локального файла. `.env` исключён из Git. Серверные ключи нельзя добавлять в переменные с префиксом `VITE_` или в клиентский код.
+Вместо `SUPABASE_SECRET_KEY` поддерживается прежний `SUPABASE_SERVICE_ROLE_KEY`. Auth использует publishable key, а доступ сервера к таблицам — secret/service_role key. Ключи и email первого менеджера не вшиваются в браузерную сборку. Не используйте префикс `VITE_` для секретных настроек.
 
-### Перенос существующих записей
+По возможности ограничьте scope переменных областью Functions. Если тариф Netlify требует All scopes, контекст всё равно должен оставаться Production; ключ будет доступен и процессу сборки. На текущем развёртывании этот вариант согласован с владельцем. `.env`, `.local` и `.netlify` исключены из Git.
 
-После SQL-миграции и настройки `.env`, пока база ещё пуста:
+В Supabase **Authentication → URL Configuration**:
+
+- Site URL: `https://willowy-moxie-1de800.netlify.app`
+- Redirect URLs: `https://willowy-moxie-1de800.netlify.app/login` и `https://willowy-moxie-1de800.netlify.app/reset-password`.
+- Для локальной работы при необходимости добавьте `http://127.0.0.1:8888/login` и `http://127.0.0.1:8888/reset-password`.
+
+Email-подтверждение должно быть включено. Зарегистрируйте адрес из `BOOTSTRAP_MANAGER_EMAIL`, подтвердите письмо и войдите: сервер назначит ему роль первого менеджера. Привилегии не берутся из формы регистрации или редактируемого `user_metadata`. При наличии менеджера произвольный новый пользователь не становится менеджером автоматически.
+
+Новые пользователи получают собственную запись клиента. После их первого подтверждённого входа менеджер видит их в разделе **Користувачі** и может назначить роль агента либо привязать аккаунт к существующей записи клиента. Чтобы клиент видел историю из импортированного файла, выберите для него соответствующую запись клиента.
+
+Защита входом Netlify действует отдельно от аккаунтов приложения. Она сохраняется без изменений; если проект закрыт для внешних посетителей, им сначала понадобится разрешённый владельцем доступ к самому сайту.
+
+### Развёртывание
+
+В Netlify импортируйте [DawnShaker/MalKukCSProj](https://github.com/DawnShaker/MalKukCSProj), ветку `main`. Корень — папка с `netlify.toml`, не `client-app`:
+
+- Build command: `npm run build`
+- Publish directory: `client-app/dist`
+- Functions: `netlify/functions`
+- Node.js: 24.
+
+Сначала выполните SQL и настройте переменные, затем публикуйте новый код. Изменения переменных требуют нового deploy. `/api/health` должен вернуть `{"status":"ok","storage":"supabase"}`; включённая защита Netlify может потребовать предварительного входа.
+
+## Работа ролей
+
+| Роль | Возможности |
+| --- | --- |
+| Менеджер | Все объекты, клиенты и сделки; назначение ответственных агентов; создание агентов; управление доступом; общая аналитика и CSV-отчёт за период. |
+| Агент | Свои объекты, клиенты и сделки. Нельзя изменять чужие записи, добавлять агентов, управлять ролями или читать общую статистику. |
+| Клиент | Каталог доступных объектов; свои запросы, сохранённые фильтры, история поиска и уведомления; создание новых поисков и запросов. |
+
+Ограничения проверяются на сервере для каждого запроса и каждого идентификатора. Обход скрытых кнопок прямым HTTP-запросом не даёт доступа. Нельзя снять роль последнего менеджера или привязать один клиентский/агентский профиль двум аккаунтам.
+
+Сессии передаются в HttpOnly cookie; в HTTPS используются `Secure`, `SameSite=Lax` и префикс `__Host-`. Токены не сохраняются в Web Storage. Изменения защищены случайным CSRF-кодом, а токен пользователя проверяется через Supabase Auth. Прямой доступ браузера к таблицам и административным RPC закрыт RLS и привилегиями.
+
+## C# / Entity Framework Core
+
+Нужен .NET SDK 10. EF Core по умолчанию использует SQLite. Начальная миграция находится в `RealEstateAgency/PersistenceLayer/Migrations`; `Database.Migrate()` создаёт схему при запуске.
+
+Импорт в пустую локальную SQLite БД:
 
 ```powershell
+dotnet run --project RealEstateAgency --no-launch-profile -- --import-json RealEstateAgency/agency_data.json
+dotnet run --project RealEstateAgency --no-launch-profile
+```
+
+После этого API .NET работает на `http://localhost:5000`. Для другой SQLite БД задайте `ConnectionStrings__Agency`, например `Data Source=D:/data/agency.db`. JSON-импорт .NET откажется перезаписывать непустую базу.
+
+Экспорт:
+
+```powershell
+dotnet run --project RealEstateAgency --no-launch-profile -- --export-json .local/agency-ef-export.json
+```
+
+`EfAgencyDataManager` подключён к `AgencyService` через `IAgencyDataManager`. Основные сущности, истории, уведомления и поиски хранятся строками таблиц, изменения и версия — в одной транзакции. `JsonDataManager` сохранён для совместимости и не выбран основным хранилищем.
+
+Для дальнейших миграций доступен локальный инструмент:
+
+```powershell
+dotnet tool restore
+dotnet ef migrations add MigrationName --project RealEstateAgency --output-dir PersistenceLayer/Migrations
+```
+
+## Дополнительный импорт и экспорт Supabase
+
+С настроенным `.env` можно предварительно просмотреть импорт и затем добавить отсутствующие записи:
+
+```powershell
+npm.cmd run db:import -- --dry-run
 npm.cmd run db:import
+npm.cmd run db:import -- .local/agency_data.json
+npm.cmd run db:export -- .local/agency-export.json
 ```
 
-Это перенесёт `RealEstateAgency/agency_data.json`, включая идентификаторы, сделки, историю и поиски. Для переноса изменений из нового локального запуска:
+Повторный импорт сохраняет изменения существующих облачных записей. Конфликтующие сделки на один объект пропускаются и указываются в отчёте. Экспорт не перезаписывает существующий файл.
+
+## Проверки
 
 ```powershell
-npm.cmd run db:import -- .local/agency_data.json
+npm.cmd test
+dotnet run --project tests/RealEstateAgency.PersistenceChecks
 ```
 
-Импорт откажется перезаписывать непустую базу. Он не выполняется автоматически при сборке или публикации. Можно пропустить импорт и добавлять записи через интерфейс.
+Node-тесты проверяют бизнес-логику, ролевую изоляцию, IDOR, CSRF, cookie и Auth-контракт; настоящая PostgreSQL-совместимая среда PGlite выполняет SQL, проверяет внешние ключи, транзакции, повторный импорт и роли. C# проверки выполняют EF-миграцию на SQLite, импортируют исходный файл и проверяют сохранение, истории и конкурентные изменения.
 
-В исходном C# enum `Tenant` и `Owner` имели одно значение `2`. В веб-версии: `1` — покупатель, `2` — арендатор, `3` — владелец. Старые записи с `2` импортируются без догадок о роли; их нужно проверить отдельно. Исходный C# JSON не изменяется.
-
-## Развёртывание на Netlify
-
-1. В Netlify выберите **Add new project → Import an existing project → GitHub**, репозиторий [DawnShaker/MalKukCSProj](https://github.com/DawnShaker/MalKukCSProj), ветка `main`.
-2. Корнем проекта должна быть папка с `netlify.toml` и этим README. **Base directory** и **Package directory** оставьте пустыми, не выбирайте `client-app` в качестве корня. Настройки берутся из `netlify.toml`:
-   - Build command: `npm run build`
-   - Publish directory: `client-app/dist`
-   - Functions directory: `netlify/functions`
-3. В **Environment variables** задайте `SUPABASE_URL` и `SUPABASE_SECRET_KEY` для среды **Production**, с доступом для **Functions**. Для старого ключа вместо `SUPABASE_SECRET_KEY` используйте `SUPABASE_SERVICE_ROLE_KEY`. Ключ вводите в Netlify, не в GitHub и не в чат.
-4. Запустите deploy. Если меняли переменные после публикации, выполните новый deploy.
-5. Откройте `https://ваш-сайт.netlify.app/api/health`: ожидается `{"status":"ok","storage":"supabase"}`. Затем проверьте каталог, клиентов, сделки и аналитику. Прямые переходы и обновление `/clients`, `/deals`, `/analytics` поддерживаются.
-
-Если API вернул `503`, проверьте переменные и выполнение SQL. Неизвестные `/api/*` возвращают JSON `404`, а не HTML. `vite preview` раздаёт только интерфейс и без API не заменяет полный запуск.
-
-Приложение, как и исходная версия, пока **не имеет авторизации пользователей**. RLS закрывает прямой доступ к таблице из браузера, но серверный `/api` доступен посетителям сайта. Для размещения с реальными контактами клиентов нужен контроль доступа к приложению; защита ключа Supabase его не заменяет.
-
-## Хранение и ограничения
-
-`agency_state` содержит один документ JSONB с коллекциями `properties`, `clients`, `agents`, `deals`, `requests`. Это сохраняет совместимость с файловой моделью учебного проекта; это ещё не нормализованная схема таблиц и не интеграция Entity Framework из будущего этапа задания.
-
-Каждая операция записи атомарно заменяет документ при совпадении `version`. При конфликте сервер перечитывает данные и повторяет операцию до пяти раз, затем отвечает `409`. Создание/отмена сделки и изменение статуса объекта сохраняются вместе. Каждый запрос читает актуальную базу; данные не зависят от памяти или файлов экземпляра Netlify Functions.
-
-Модель подходит для небольшой учебной CRM. При росте объёма потребуется переход к отдельным таблицам и транзакциям PostgreSQL. Денежные суммы новой версии округляются до центов; календарные дни и месяцы аналитики определяются в `Europe/Kyiv`.
-
-Автотесты проверяют бизнес-операции, HTTP-контракт, импорт формата C#, перезапуски локального хранилища и конфликты Supabase через имитацию REST API. Подключение к настоящему Supabase проверяется после создания проекта.
-
-Документация платформ: [Netlify Functions](https://docs.netlify.com/build/functions/get-started/), [Netlify configuration](https://docs.netlify.com/build/configure-builds/file-based-configuration/), [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+Документация: [Supabase Auth](https://supabase.com/docs/guides/auth), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [EF Core](https://learn.microsoft.com/en-us/ef/core/), [Netlify Functions](https://docs.netlify.com/build/functions/get-started/).

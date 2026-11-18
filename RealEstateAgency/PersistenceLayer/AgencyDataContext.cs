@@ -16,6 +16,7 @@ namespace RealEstateAgency.PersistenceLayer
         public List<Deal> Deals { get; set; } = new List<Deal>();
 
         public List<ClientRequest> Requests { get; set; } = new List<ClientRequest>();
+        public List<ClientSearchHistory> SearchHistory { get; set; } = new();
     }
 
 }

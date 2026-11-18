@@ -7,6 +7,8 @@ using RealEstateAgency.BusinessLogicLayer;
 using RealEstateAgency.PersistenceLayer;
 using RealEstateAgency.PersistenceLayer.Entities;
 using RealEstateAgency.DTOs;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,10 +19,38 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 });
 
-builder.Services.AddSingleton<JsonDataManager>(_ => new JsonDataManager("agency_data.json"));
-builder.Services.AddSingleton<AgencyService>();
+builder.Services.AddDbContext<AgencyDbContext>(options => options.UseSqlite(
+    builder.Configuration.GetConnectionString("Agency") ?? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "agency.db")}"));
+builder.Services.AddScoped<IAgencyDataManager, EfAgencyDataManager>();
+builder.Services.AddScoped<AgencyService>();
 
 var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AgencyDbContext>();
+    db.Database.Migrate();
+    var data = scope.ServiceProvider.GetRequiredService<IAgencyDataManager>();
+    var importIndex = Array.IndexOf(args, "--import-json");
+    var exportIndex = Array.IndexOf(args, "--export-json");
+    if (importIndex >= 0)
+    {
+        if (importIndex + 1 >= args.Length) throw new ArgumentException("Specify the JSON file to import.");
+        var existing = data.LoadData();
+        if (existing.Properties.Any() || existing.Clients.Any() || existing.Agents.Any() || existing.Deals.Any() || existing.Requests.Any())
+            throw new InvalidOperationException("Import refused: database is not empty.");
+        var imported = JsonSerializer.Deserialize<AgencyDataContext>(File.ReadAllText(args[importIndex + 1]), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidDataException("Invalid agency JSON.");
+        data.SaveData(imported);
+        Console.WriteLine($"Imported {imported.Properties.Count} properties, {imported.Clients.Count} clients and {imported.Deals.Count} deals into relational tables.");
+        return;
+    }
+    if (exportIndex >= 0)
+    {
+        if (exportIndex + 1 >= args.Length) throw new ArgumentException("Specify the export file.");
+        File.WriteAllText(args[exportIndex + 1], JsonSerializer.Serialize(data.LoadData(), new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+        return;
+    }
+}
 app.UseCors("AllowReact");
 
 // ================= 1. НЕРУХОМІСТЬ ТА ФІЛЬТРИ =================

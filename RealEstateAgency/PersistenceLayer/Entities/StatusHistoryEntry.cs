@@ -5,6 +5,9 @@ namespace RealEstateAgency.PersistenceLayer.Entities
 {
     public class StatusHistoryEntry
     {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid PropertyId { get; set; }
+        public int Position { get; set; }
         public DateTime ChangedAt { get; set; } = DateTime.Now;
         public PropertyStatus OldStatus { get; set; }
         public PropertyStatus NewStatus { get; set; }

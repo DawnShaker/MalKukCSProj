@@ -11,7 +11,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
     {
         Buyer = 1,
         Tenant = 2,
-        Owner = 2
+        Owner = 3
     }
 
     public enum  DealType

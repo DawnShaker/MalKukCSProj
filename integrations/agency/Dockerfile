@@ -18,6 +18,7 @@ WORKDIR /app
 COPY --from=build /app /app
 COPY integrations/security/supabase-ca.crt /app/certificates/supabase-ca.crt
 ENV ASPNETCORE_HTTP_PORTS=8080 ASPNETCORE_ENVIRONMENT=Production PGSSLROOTCERT=/app/certificates/supabase-ca.crt
+ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "/app/RealEstateAgency.dll"]

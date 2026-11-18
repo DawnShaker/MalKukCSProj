@@ -63,6 +63,7 @@ function browser() {
   let csrf;
   return { async request(path, method='GET', data, withCsrf=true) {
     const response = await fetch(`${base}/api${path}`, { method, redirect:'manual', headers: {
+      ...(env.ASPNETCORE_FORWARDEDHEADERS_ENABLED === 'true' ? {'X-Forwarded-Proto':'https'} : {}),
       Cookie:[...cookies].map(([key,value])=>`${key}=${value}`).join('; '),
       ...(data === undefined ? {} : {'Content-Type':'application/json'}),
       ...(csrf && withCsrf ? {'X-CSRF-Token':csrf} : {}) },
@@ -134,6 +135,14 @@ try {
   await client.session.request('/auth/session');
   await client.session.request('/auth/logout','POST',{});
   check((await client.session.request('/properties')).status===401,'logout removes authenticated access');
+  await stop();
+  env.ASPNETCORE_ENVIRONMENT='Production';
+  env.ASPNETCORE_FORWARDEDHEADERS_ENABLED='true';
+  await start();
+  const proxyBrowser=browser();
+  const proxySession=await proxyBrowser.request('/auth/session');
+  check(proxySession.status===200 && proxySession.body.csrfToken && proxySession.headers.getSetCookie().some(value=>value.startsWith('agency-csrf=') && /; secure/i.test(value)), 'HTTPS behind a proxy issues a secure CSRF cookie in Production');
+  check((await proxyBrowser.request('/auth/logout','POST',{},false)).status===400 && (await proxyBrowser.request('/auth/logout','POST',{})).status===200, 'Production proxy keeps CSRF validation enabled');
   console.log(`Completed ${checks} C# stage 5–6 checks.`);
 } finally {
   await stop();

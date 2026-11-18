@@ -21,6 +21,8 @@ namespace RealEstateAgency.PersistenceLayer.Entities
                 throw new ArgumentException("Загальна вартість угоди повинна бути більшою за нуль.");
             if(commissionPercent < 0 || commissionPercent > 100)
                 throw new ArgumentException("Відсоток комісії повинен бути в межах від 0 до 100%.");
+            if (!Enum.IsDefined(type))
+                throw new ArgumentException("Некоректний тип угоди.");
 
             Date = DateTime.Now;
             PropertyId = propertyId;

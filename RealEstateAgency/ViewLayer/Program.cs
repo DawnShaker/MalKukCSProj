@@ -1,28 +1,70 @@
-using System;
-using System.Collections.Generic;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 using RealEstateAgency.BusinessLogicLayer;
+using RealEstateAgency.IntegrationLayer;
 using RealEstateAgency.PersistenceLayer;
 using RealEstateAgency.PersistenceLayer.Entities;
-using RealEstateAgency.DTOs;
-using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Разрешаем запросы от React-приложения (CORS)
-builder.Services.AddCors(options =>
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
-    options.AddPolicy("AllowReact", policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    Args = args, WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot")
 });
-
-builder.Services.AddDbContext<AgencyDbContext>(options => options.UseSqlite(
-    builder.Configuration.GetConnectionString("Agency") ?? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "agency.db")}"));
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+var postgres = builder.Configuration["Database:Provider"] == "PostgreSQL";
+if (postgres)
+{
+    builder.Services.AddDbContext<PostgresAgencyDbContext>(options => options.UseNpgsql(
+        builder.Configuration.GetConnectionString("Agency"),
+        settings => settings.MigrationsHistoryTable("__EFMigrationsHistory", "agency_ef")));
+    builder.Services.AddScoped<AgencyDbContext>(services => services.GetRequiredService<PostgresAgencyDbContext>());
+}
+else
+{
+    builder.Services.AddDbContext<AgencyDbContext>(options => options.UseSqlite(
+        builder.Configuration.GetConnectionString("Agency") ?? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "agency.db")}"));
+}
 builder.Services.AddScoped<IAgencyDataManager, EfAgencyDataManager>();
 builder.Services.AddScoped<AgencyService>();
+builder.Services.AddScoped<AccountService>();
+builder.Services.AddHttpClient<SecurityClient>(http => http.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
+builder.Services.Configure<ApiBehaviorOptions>(options => options.InvalidModelStateResponseFactory =
+    context => new BadRequestObjectResult(new { error = "Перевірте обов'язкові поля та формат значень." }));
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-Token";
+    options.Cookie.Name = "agency-csrf";
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+});
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
+{
+    options.Cookie.Name = "agency-session";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    options.SlidingExpiration = false;
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = 401;
+        return context.Response.WriteAsJsonAsync(new { error = "Увійдіть до свого облікового запису." });
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = 403;
+        return context.Response.WriteAsJsonAsync(new { error = "Недостатньо прав." });
+    };
+});
+builder.Services.AddAuthorization();
+var protection = builder.Services.AddDataProtection().SetApplicationName("RealEstateAgency");
+if (postgres) protection.PersistKeysToDbContext<AgencyDbContext>();
+else protection.PersistKeysToFileSystem(new DirectoryInfo(
+    builder.Configuration["DataProtection:Path"] ?? Path.Combine(builder.Environment.ContentRootPath, ".local", "keys")));
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
@@ -40,7 +82,27 @@ using (var scope = app.Services.CreateScope())
             throw new InvalidOperationException("Import refused: database is not empty.");
         var imported = JsonSerializer.Deserialize<AgencyDataContext>(File.ReadAllText(args[importIndex + 1]), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidDataException("Invalid agency JSON.");
+        // В старом JSON ответственный агент был указан только в сделке.
+        foreach (var property in imported.Properties.Where(property => !property.AgentId.HasValue))
+        {
+            var agents = imported.Deals.Where(deal => deal.PropertyId == property.Id).Select(deal => deal.AgentId).Distinct().ToList();
+            if (agents.Count == 1) property.AgentId = agents[0];
+        }
+        foreach (var client in imported.Clients.Where(client => !client.AgentId.HasValue))
+        {
+            var agents = imported.Deals.Where(deal => deal.ClientId == client.Id).Select(deal => deal.AgentId).Distinct().ToList();
+            if (agents.Count == 1) client.AgentId = agents[0];
+        }
+        using var transaction = db.Database.BeginTransaction();
         data.SaveData(imported);
+        using var document = JsonDocument.Parse(File.ReadAllText(args[importIndex + 1]));
+        if (document.RootElement.TryGetProperty("userProfiles", out var profiles))
+        {
+            var users = profiles.Deserialize<List<UserProfile>>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+            db.UserProfiles.AddRange(users);
+            db.SaveChanges();
+        }
+        transaction.Commit();
         Console.WriteLine($"Imported {imported.Properties.Count} properties, {imported.Clients.Count} clients and {imported.Deals.Count} deals into relational tables.");
         return;
     }
@@ -51,128 +113,34 @@ using (var scope = app.Services.CreateScope())
         return;
     }
 }
-app.UseCors("AllowReact");
 
-// ================= 1. НЕРУХОМІСТЬ ТА ФІЛЬТРИ =================
-app.MapGet("/api/properties", (AgencyService s) => Results.Ok(s.GetAllProperties()));
-
-app.MapPost("/api/properties/search", (AgencyService s, PropertySearchFilter filter) =>
-    Results.Ok(s.SearchProperties(filter)));
-
-app.MapPost("/api/properties", (AgencyService s, CreatePropertyDto dto) =>
+app.Use(async (context, next) =>
 {
-    try
+    if (context.Request.Path.StartsWithSegments("/api")) context.Response.Headers.CacheControl = "no-store";
+    try { await next(); }
+    catch (Exception error)
     {
-        var prop = s.CreateProperty(dto.Type, dto.Area, dto.Address, dto.District, dto.Landmark, dto.Rooms, dto.Price, dto.Status, dto.YearBuilt, out var notifications);
-        return Results.Ok(new { property = prop, notifications });
+        var status = error switch
+        {
+            ApiException problem => problem.StatusCode,
+            DbUpdateException => 409,
+            ArgumentException => 400,
+            _ => 500
+        };
+        var message = error is ApiException or ArgumentException ? error.Message
+            : status == 409 ? "Дані змінилися або запис має пов'язані дані. Оновіть сторінку та повторіть дію."
+            : "Внутрішня помилка сервера.";
+        if (status == 500) app.Logger.LogError("Agency request failed: {ErrorType}", error.GetType().Name);
+        context.Response.StatusCode = status;
+        await context.Response.WriteAsJsonAsync(new { error = message });
     }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
 });
-
-app.MapPut("/api/properties/{id}", (AgencyService s, string id, CreatePropertyDto dto) =>
-{
-    try
-    {
-        s.UpdateProperty(id, dto.Type, dto.Area, dto.Address, dto.District, dto.Landmark, dto.Rooms, dto.Price, dto.Status, dto.YearBuilt);
-        return Results.Ok();
-    }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-app.MapPatch("/api/properties/{id}/status", (AgencyService s, string id, ChangeStatusDto dto) =>
-{
-    try
-    {
-        s.ChangePropertyStatus(id, dto.NewStatus, dto.Comment);
-        return Results.Ok();
-    }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-app.MapDelete("/api/properties/{id}", (AgencyService s, string id) =>
-{
-    try { s.DeleteProperty(id); return Results.Ok(); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-// ================= 2. КЛІЄНТИ, ПОШУКИ ТА СПОВІЩЕННЯ =================
-app.MapGet("/api/clients", (AgencyService s) => Results.Ok(s.GetAllClients()));
-
-app.MapPost("/api/clients", (AgencyService s, CreateClientDto dto) =>
-{
-    try { return Results.Ok(s.CreateClient(dto.Name, dto.ContactInfo, dto.Type)); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-app.MapDelete("/api/clients/{id}", (AgencyService s, string id) =>
-{
-    try { s.DeleteClient(id); return Results.Ok(); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-app.MapPost("/api/clients/{id}/searches", (AgencyService s, string id, SaveSearchDto dto) =>
-{
-    try { s.SaveClientSearch(id, dto.Title, dto.Filter); return Results.Ok(); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-// ================= 3. РІЄЛТОРИ ТА УГОДИ =================
-app.MapGet("/api/agents", (AgencyService s) => Results.Ok(s.GetAllAgents()));
-
-app.MapPost("/api/agents", (AgencyService s, CreateAgentDto dto) =>
-{
-    try { return Results.Ok(s.CreateAgent(dto.Name, dto.ExperienceYears)); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-app.MapDelete("/api/agents/{id}", (AgencyService s, string id) =>
-{
-    try { s.DeleteAgent(id); return Results.Ok(); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-app.MapGet("/api/deals", (AgencyService s) => Results.Ok(s.GetAllDeals()));
-
-app.MapPost("/api/deals", (AgencyService s, CreateDealDto dto) =>
-{
-    try { return Results.Ok(s.CreateDeal(dto.PropertyId, dto.ClientId, dto.AgentId, dto.Price, dto.DealType, dto.Commission)); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-app.MapDelete("/api/deals/{id}", (AgencyService s, string id, string? reason) =>
-{
-    try { s.CancelDeal(id, reason ?? "Розірвання договору через веб-панель"); return Results.Ok(); }
-    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
-});
-
-// ================= 4. АНАЛІТИКА ТА СТАТИСТИКА (ЕТАП 3) =================
-app.MapGet("/api/analytics", (AgencyService s, DateTime? startDate, DateTime? endDate) =>
-{
-    var properties = s.GetAllProperties();
-    var clients = s.GetAllClients();
-
-    return Results.Ok(new
-    {
-        dealsCount = s.GetDealsByPeriod(startDate, endDate).Count,
-        totalSales = s.GetTotalSalesAmount(startDate, endDate),
-        totalProfit = s.GetTotalAgencyProfit(startDate, endDate),
-        avgSqmCatalog = s.GetAveragePricePerSquareMeterAllProperties(),
-        avgSqmDeals = s.GetAveragePricePerSquareMeterSoldDeals(),
-        agentsPerformance = s.GetAgentsPerformance(),
-        mostActiveClients = s.GetMostActiveClients(),
-
-        priceDynamics = s.GetPriceDynamics(),
-        totalProperties = properties.Count,
-        forSaleCount = properties.Count(p => p.Status == PropertyStatus.ForSale),
-        forRentCount = properties.Count(p => p.Status == PropertyStatus.ForRent),
-        soldCount = properties.Count(p => p.Status == PropertyStatus.Sold),
-        totalClients = clients.Count,
-        buyersCount = clients.Count(c => c.Type == ClientType.Buyer),
-        tenantsCount = clients.Count(c => c.Type == ClientType.Tenant),
-        ownersCount = clients.Count(c => c.Type == ClientType.Owner),
-        totalRequests = s.GetTotalRequestsCount()
-    });
-});
-
-app.Run("http://localhost:5000");
-
+app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+app.MapGet("/api/health", (AgencyDbContext db) =>
+    db.Database.CanConnect() ? Results.Ok(new { status = "ok", storage = postgres ? "ef-core-postgresql" : "ef-core-sqlite" }) : Results.StatusCode(503));
+app.MapFallback("/api/{**path}", () => Results.NotFound(new { error = "API-маршрут не знайдено." }));
+app.MapFallbackToFile("index.html");
+app.Run();

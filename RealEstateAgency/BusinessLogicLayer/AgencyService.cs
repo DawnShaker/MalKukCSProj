@@ -40,11 +40,6 @@ namespace RealEstateAgency.BusinessLogicLayer
             _dataManager = dataManager;
             _context = _dataManager.LoadData();
 
-            if (!_context.Agents.Any())
-            {
-                _context.Agents.Add(new Agent("Іван Іваненко", 5));
-                _dataManager.SaveData(_context);
-            }
         }
 
         public void SaveChanges() => _dataManager.SaveData(_context);
@@ -52,9 +47,11 @@ namespace RealEstateAgency.BusinessLogicLayer
 
         // CRUD Property
 
-        public Property CreateProperty(string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus status, int yearBuilt, out List<string> generatedNotifications)
+        public Property CreateProperty(string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus status, int yearBuilt, out List<string> generatedNotifications, Guid? agentId = null)
         {
+            if (agentId.HasValue) GetAgentById(agentId.Value.ToString());
             var property = new Property(type, area, address, district, landmark, rooms, price, status, yearBuilt);
+            property.AgentId = agentId;
             _context.Properties.Add(property);
 
             generatedNotifications = NotifyMatchingClients(property);
@@ -95,10 +92,14 @@ namespace RealEstateAgency.BusinessLogicLayer
             return prop;
         }
 
-        public void UpdateProperty(string id, string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus status, int yearBuilt)
+        public void UpdateProperty(string id, string type, double area, string address, string district, string landmark, int rooms, decimal price, PropertyStatus status, int yearBuilt, Guid? agentId = null)
         {
             var prop = GetPropertyById(id);
+            if (agentId.HasValue) GetAgentById(agentId.Value.ToString());
+            if (prop.AgentId != agentId && _context.Deals.Any(d => d.PropertyId == prop.Id))
+                throw new ApiException(400, "Спочатку розірвіть угоду, потім змініть відповідального агента.");
             prop.Update(type, area, address, district, landmark, rooms, price, status, yearBuilt);
+            prop.AgentId = agentId;
             SaveChanges();
         }
 
@@ -119,7 +120,7 @@ namespace RealEstateAgency.BusinessLogicLayer
         {
             var prop = GetPropertyById(id);
             if (_context.Deals.Any(d => d.PropertyId == prop.Id))
-                throw new InvalidOperationException("Неможливо видалити нерухомість, яка пов'язана з угодою.");
+                throw new ApiException(400, "Неможливо видалити нерухомість, яка пов'язана з угодою.");
 
             _context.Properties.Remove(prop);
             SaveChanges();
@@ -129,11 +130,13 @@ namespace RealEstateAgency.BusinessLogicLayer
 
         public List<Property> SearchProperties(PropertySearchFilter filter)
         {
+            filter.Validate();
             return _context.Properties.Where(p => filter.Matches(p)).ToList();
         }
 
         public void SaveClientSearch(string clientId, string searchTitle, PropertySearchFilter filter)
         {
+            filter.Validate();
             var client = GetClientById(clientId);
             client.AddSavedSearch(searchTitle, filter);
             SaveChanges();
@@ -153,9 +156,11 @@ namespace RealEstateAgency.BusinessLogicLayer
 
         // CRUD ДЛЯ CLIENT
 
-        public Client CreateClient(string name, string contactInfo, ClientType type)
+        public Client CreateClient(string name, string contactInfo, ClientType type, Guid? agentId = null)
         {
+            if (agentId.HasValue) GetAgentById(agentId.Value.ToString());
             var client = new Client(name, contactInfo, type);
+            client.AgentId = agentId;
             _context.Clients.Add(client);
             SaveChanges();
             return client;
@@ -174,10 +179,12 @@ namespace RealEstateAgency.BusinessLogicLayer
             return client;
         }
 
-        public void UpdateClient(string id, string name, string contactInfo, ClientType type)
+        public void UpdateClient(string id, string name, string contactInfo, ClientType type, Guid? agentId = null)
         {
             var client = GetClientById(id);
+            if (agentId.HasValue) GetAgentById(agentId.Value.ToString());
             client.Update(name, contactInfo, type);
+            client.AgentId = agentId;
             SaveChanges();
         }
 
@@ -185,9 +192,11 @@ namespace RealEstateAgency.BusinessLogicLayer
         {
             var client = GetClientById(id);
             if (_context.Deals.Any(d => d.ClientId == client.Id))
-                throw new InvalidOperationException("Неможливо видалити клієнта, який пов'язаний з угодою.");
+                throw new ApiException(400, "Неможливо видалити клієнта, який пов'язаний з угодою.");
 
             _context.Clients.Remove(client);
+            _context.Requests.RemoveAll(row => row.ClientId == client.Id);
+            _context.SearchHistory.RemoveAll(row => row.ClientId == client.Id);
             SaveChanges();
         }
 
@@ -218,7 +227,9 @@ namespace RealEstateAgency.BusinessLogicLayer
         {
             var agent = GetAgentById(id);
             if (_context.Deals.Any(d => d.AgentId == agent.Id))
-                throw new InvalidOperationException("Неможливо видалити рієлтора, який пов'язаний з угодою.");
+                throw new ApiException(400, "Неможливо видалити рієлтора, який пов'язаний з угодою.");
+            if (_context.Properties.Any(p => p.AgentId == agent.Id) || _context.Clients.Any(c => c.AgentId == agent.Id))
+                throw new ApiException(400, "Спочатку перепризначте об'єкти та клієнтів цього агента.");
 
             _context.Agents.Remove(agent);
             SaveChanges();
@@ -231,7 +242,9 @@ namespace RealEstateAgency.BusinessLogicLayer
             var agent = GetAgentById(agentId);
 
             if (property.Status == PropertyStatus.Sold)
-                throw new InvalidOperationException("Цей об'єкт вже продано! Угоду створити неможливо.");
+                throw new ApiException(400, "Цей об'єкт вже продано! Угоду створити неможливо.");
+            if (_context.Deals.Any(d => d.PropertyId == property.Id))
+                throw new ApiException(400, "Для цього об'єкта вже існує угода.");
 
             var deal = new Deal(property.Id, agent.Id, client.Id, price, dealType, commission);
             property.ChangeStatus(PropertyStatus.Sold, $"Укладено угоду [{deal.Id.ToString().Substring(0, 8)}]");
@@ -359,6 +372,7 @@ namespace RealEstateAgency.BusinessLogicLayer
 
         public ClientRequest CreateClientRequest(Guid clientId, string title, PropertySearchFilter filter)
         {
+            filter.Validate();
             var client = GetClientById(clientId.ToString()) ?? throw new Exception("Клієнта не знайдено.");
 
             var request = new ClientRequest(clientId, title, filter);
@@ -414,6 +428,30 @@ namespace RealEstateAgency.BusinessLogicLayer
         public int GetTotalRequestsCount()
         {
             return _context.Requests?.Count ?? 0;
+        }
+
+        public List<ClientSearchHistory> GetClientSearchHistory(Guid clientId)
+        {
+            return _context.SearchHistory.Where(row => row.ClientId == clientId)
+                .OrderByDescending(row => row.CreatedAt).Take(50).ToList();
+        }
+
+        public void RecordClientSearch(Guid clientId, PropertySearchFilter filter, int resultCount)
+        {
+            GetClientById(clientId.ToString());
+            _context.SearchHistory.Add(new ClientSearchHistory { ClientId = clientId, Filter = filter, ResultCount = resultCount });
+            SaveChanges();
+        }
+
+        public List<ClientRequest> GetClientRequests(Guid clientId)
+        {
+            return _context.Requests.Where(row => row.ClientId == clientId).ToList();
+        }
+
+        public ClientRequest GetRequestById(Guid id)
+        {
+            return _context.Requests.FirstOrDefault(row => row.Id == id)
+                ?? throw new ArgumentException("Запит не знайдено.");
         }
     }
 }

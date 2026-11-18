@@ -11,6 +11,7 @@ namespace RealEstateAgency.DTOs
         int Rooms,
         decimal Price,
         PropertyStatus Status,
-        int YearBuilt
+        int YearBuilt,
+        Guid? AgentId = null
      );
 }

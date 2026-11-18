@@ -92,7 +92,7 @@ namespace RealEstateAgency.PersistenceLayer.Entities
             if(Status == PropertyStatus.Sold && !allowFromSold)
             {
                 if(!allowFromSold)
-                    throw new InvalidOperationException("Неможливо змінити статус нерухомості, яка вже продана (спочатку розірвіть угоду).");
+                    throw new ArgumentException("Неможливо змінити статус нерухомості, яка вже продана (спочатку розірвіть угоду).");
             }
 
             StatusHistory.Add(new StatusHistoryEntry

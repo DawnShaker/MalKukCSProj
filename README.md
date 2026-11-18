@@ -2,14 +2,23 @@
 
 Реализация этапов 1–6 учебного проекта. Проверка требований и архитектуры описана в [docs/project-stages.md](docs/project-stages.md).
 
-- **Веб-приложение:** React/Vite, Netlify Functions, таблицы Supabase PostgreSQL и настраиваемый авторизатор: Supabase Auth либо [Security преподавателя](docs/security-server.md).
-- **C# приложение:** ASP.NET Core .NET 10, бизнес-логика и EF Core 10 с SQLite. Сохранение по умолчанию выполняется в БД, а JSON используется для импорта/экспорта.
+- **Основной учебный вариант:** ASP.NET Core .NET 10 проверяет вход через Security, роли и владельцев записей; бизнес-логика сохраняет данные через EF Core. Локально используется SQLite, на бесплатном хостинге — PostgreSQL Supabase. [Запуск и демонстрация этапов 5–6](docs/stages-5-6.md).
+- **Финальная облачная схема:** интерфейс Netlify обращается к C# API на Render Free. Аккаунты проверяет отдельный Security. Данные агентства и ключи сессий C# сохраняются в закрытой схеме `agency_ef` Supabase.
 
-Netlify не запускает C# процесс: его HTTP API реализован в JavaScript. Вариант .NET позволяет запускать и проверять требуемый в задании EF Core локально. Оба варианта сохраняют исходные идентификаторы и бизнес-данные; изменения правил в них нужно согласовывать.
+Быстрый запуск основного варианта при уже работающем и настроенном Security:
+
+```powershell
+npm.cmd run agency:build
+npm.cmd run agency:start
+```
+
+Адрес: <http://127.0.0.1:5000>. Первая подготовка локального Security и подключение уже настроенного HTTPS Security описаны в [инструкции](docs/stages-5-6.md). Локальные роли работают с одной `.local/agency.db`. JSON используется только для импорта/экспорта. Для общей облачной БД задаются `Database__Provider=PostgreSQL` и `ConnectionStrings__Agency`; клиентские запросы по-прежнему проходят через C# и EF Core.
+
+Настройки контейнера API находятся в `integrations/agency/Dockerfile`, бесплатного сервиса — в `render-agency.yaml`. SQLite и PostgreSQL используют отдельные EF-миграции. Ключи cookie в PostgreSQL сохраняет стандартный `PersistKeysToDbContext`.
 
 Для авторизатора из `negativchik09/Security` подготовлены команды `npm.cmd run security:prepare` и `npm.cmd run security:start`, адаптер JWT и [пошаговая инструкция](docs/security-server.md). Бесплатное размещение на Render описано в `render.yaml`; аккаунты сохраняются в PostgreSQL Supabase. Для подключения Netlify требуется HTTPS-адрес созданного сервера.
 
-## Быстрый локальный запуск веб-версии
+## Дополнительный локальный запуск прежнего JavaScript API
 
 Нужен Node.js 22 или новее. Из корня репозитория:
 

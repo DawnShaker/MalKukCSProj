@@ -1,5 +1,8 @@
 import { request } from "./http";
 
+// Пустой пункт select означает отсутствие связи, а не строковый идентификатор.
+const withAgent = (dto) => ({ ...dto, agentId: dto.agentId || null });
+
 export const agencyApi = {
   // Нерухомість
   getProperties: () => request("/properties"),
@@ -9,7 +12,7 @@ export const agencyApi = {
       body: JSON.stringify(filter),
     }),
   createProperty: (dto) =>
-    request("/properties", { method: "POST", body: JSON.stringify(dto) }),
+    request("/properties", { method: "POST", body: JSON.stringify(withAgent(dto)) }),
   changePropertyStatus: (id, newStatus, comment) =>
     request(`/properties/${id}/status`, {
       method: "PATCH",
@@ -20,15 +23,18 @@ export const agencyApi = {
   // Клієнти та пошуки
   getClients: () => request("/clients"),
   createClient: (dto) =>
-    request("/clients", { method: "POST", body: JSON.stringify(dto) }),
+    request("/clients", { method: "POST", body: JSON.stringify(withAgent(dto)) }),
   deleteClient: (id) => request(`/clients/${id}`, { method: "DELETE" }),
   updateClient: (id, dto) =>
-    request(`/clients/${id}`, { method: "PUT", body: JSON.stringify(dto) }),
+    request(`/clients/${id}`, { method: "PUT", body: JSON.stringify(withAgent(dto)) }),
   getClientHistory: (id) => request(`/clients/${id}/history`),
   getRequestMatches: (id) => request(`/requests/${id}/matches`),
   getUsers: () => request("/users"),
   updateUserRole: (id, dto) =>
-    request(`/users/${id}`, { method: "PATCH", body: JSON.stringify(dto) }),
+    request(`/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...dto, agentId: dto.agentId || null, clientId: dto.clientId || null }),
+    }),
   saveClientSearch: (clientId, title, filter) =>
     request(`/clients/${clientId}/searches`, {
       method: "POST",
@@ -65,6 +71,6 @@ export const agencyApi = {
   updateProperty: (id, propertyDto) =>
     request(`/properties/${id}`, {
       method: "PUT",
-      body: JSON.stringify(propertyDto),
+      body: JSON.stringify(withAgent(propertyDto)),
     }),
 };

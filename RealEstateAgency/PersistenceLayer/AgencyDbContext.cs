@@ -3,11 +3,13 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RealEstateAgency.PersistenceLayer.Entities;
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 
 namespace RealEstateAgency.PersistenceLayer;
 
-public class AgencyDbContext(DbContextOptions<AgencyDbContext> options) : DbContext(options)
+public class AgencyDbContext(DbContextOptions options) : DbContext(options), IDataProtectionKeyContext
 {
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<Agent> Agents => Set<Agent>();
@@ -69,5 +71,6 @@ public class AgencyDbContext(DbContextOptions<AgencyDbContext> options) : DbCont
             foreach (var property in entity.GetProperties())
                 property.SetColumnName(char.ToLowerInvariant(property.Name[0]) + property.Name[1..]);
         }
+        model.Entity<DataProtectionKey>().Property(key => key.Id).ValueGeneratedOnAdd();
     }
 }

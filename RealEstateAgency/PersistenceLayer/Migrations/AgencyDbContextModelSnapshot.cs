@@ -17,6 +17,26 @@ namespace RealEstateAgency.PersistenceLayer.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("FriendlyName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("friendlyName");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("xml");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DataProtectionKeys");
+                });
+
             modelBuilder.Entity("RealEstateAgency.PersistenceLayer.Entities.AgencyRevision", b =>
                 {
                     b.Property<int>("Id")

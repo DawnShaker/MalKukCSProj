@@ -5,6 +5,7 @@ namespace RealEstateAgency.DTOs
     public record CreateClientDto(
         string Name,
         string ContactInfo,
-        ClientType Type
+        ClientType Type,
+        Guid? AgentId = null
     );
 }

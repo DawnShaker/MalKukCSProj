@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: realestate-agency-dawnshaker
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: security-integration
+    dockerfilePath: integrations/agency/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: ASPNETCORE_HTTP_PORTS
+        value: "8080"
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Database__Provider
+        value: PostgreSQL
+      - key: ConnectionStrings__Agency
+        sync: false
+      - key: Security__Url
+        value: https://realestate-security-whp8.onrender.com
+      - key: Security__JwtKey
+        sync: false
+      - key: Security__Issuer
+        value: real-estate-security
+      - key: Security__Audience
+        value: real-estate-agency
+      - key: Security__BootstrapManagerUsername
+        sync: false

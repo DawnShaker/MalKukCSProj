@@ -19,9 +19,20 @@ namespace RealEstateAgency.PersistenceLayer.Entities
         public int? MaxYearBuilt { get; set; }
         public PropertyStatus? Status { get; set; }
 
+        public void Validate()
+        {
+            if (MinPrice < 0 || MaxPrice < 0 || MinArea < 0 || MaxArea < 0 || Rooms < 1 ||
+                MinYearBuilt < 1 || MaxYearBuilt > DateTime.Now.Year ||
+                MinPrice > MaxPrice || MinArea > MaxArea || MinYearBuilt > MaxYearBuilt ||
+                (Status.HasValue && !Enum.IsDefined(Status.Value)))
+                throw new ArgumentException("Некоректні межі фільтра.");
+        }
+
         public bool Matches(Property p)
         {
             if (!string.IsNullOrWhiteSpace(Type) && !p.Type.Contains(Type, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (!string.IsNullOrWhiteSpace(Address) && !p.Address.Contains(Address, StringComparison.OrdinalIgnoreCase))
                 return false;
             if (MinPrice.HasValue && p.Price < MinPrice.Value)
                 return false;

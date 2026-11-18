@@ -91,6 +91,8 @@ Render Free засыпает после 15 минут простоя и теря
 5. Задайте **BootstrapAdmin__Username** и частный **BootstrapAdmin__Password** длиной хотя бы 12 символов. `Jwt__Key` Blueprint генерирует автоматически; issuer и audience уже заданы.
 6. Запустите deploy. При старте EF Core применяет миграцию только своего PostgreSQL-контекста и создаёт начального администратора. URL вида `https://…onrender.com/health` должен вернуть `{"status":"ok"}`.
 
+Контейнер содержит публичный корневой сертификат Supabase в `integrations/security/supabase-ca.crt` и указывает его Npgsql через `PGSSLROOTCERT`. Источник сертификата: [Supabase certificate distribution](https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt). Поэтому подключение с `sslmode=verify-full` проверяет и цепочку сертификатов, и имя сервера Session pooler. Отключать проверку сертификата не требуется. При замене CA обновите файл из официального источника и пересоберите контейнер.
+
 Пароли хранятся в виде хешей ASP.NET Identity. Для схемы аккаунтов отзывается доступ `PUBLIC`, `anon`, `authenticated`, `service_role` и включается RLS. Netlify получает профиль и роль из существующей CRM-схемы через свой API-ключ, а пароль проверяет отдельный сервер Security.
 
 Для самостоятельной сборки Docker из корня репозитория:

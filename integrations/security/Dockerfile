@@ -16,7 +16,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 RUN mkdir /data && chown app:app /data
 WORKDIR /data
 COPY --from=build /app /app
-ENV ASPNETCORE_HTTP_PORTS=8080 ASPNETCORE_ENVIRONMENT=Production
+# Public CA downloaded from Supabase's certificate distribution endpoint.
+COPY integrations/security/supabase-ca.crt /app/certificates/supabase-ca.crt
+ENV ASPNETCORE_HTTP_PORTS=8080 ASPNETCORE_ENVIRONMENT=Production PGSSLROOTCERT=/app/certificates/supabase-ca.crt
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "/app/Security.dll"]

@@ -1,17 +1,14 @@
 [build]
   command = "npm run build"
   publish = "client-app/dist"
-  functions = "netlify/functions"
+  functions = "netlify/disabled-functions"
 
 [build.environment]
   NODE_VERSION = "24"
 
-[functions]
-  node_bundler = "esbuild"
-
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
+  to = "https://realestate-agency-dawnshaker.onrender.com/api/:splat"
   status = 200
   force = true
 

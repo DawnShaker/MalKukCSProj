@@ -76,7 +76,14 @@ export function createHandler(getStore, options = {}) {
           result = {
             user: await authenticate(request, true),
             csrfToken,
+            auth: options.auth?.capabilities || {
+              identifier: "email",
+              signup: false,
+              recovery: false,
+              refresh: false,
+            },
             needsRefresh: Boolean(
+              options.auth?.capabilities?.refresh &&
               cookies(request)[cookieName(request, "refresh")],
             ),
           };

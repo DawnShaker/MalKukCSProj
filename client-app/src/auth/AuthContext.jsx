@@ -6,11 +6,20 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [auth, setAuth] = useState({
+    identifier: "email",
+    signup: false,
+    recovery: false,
+    refresh: false,
+  });
   useEffect(() => {
     let active = true;
     authApi
       .session()
-      .then(async (data) => (data.needsRefresh ? authApi.refresh() : data))
+      .then(async (data) => {
+        if (active && data.auth) setAuth(data.auth);
+        return data.needsRefresh ? authApi.refresh() : data;
+      })
       .then((data) => {
         if (active) setUser(data.user);
       })
@@ -41,7 +50,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, auth }}>
       {children}
     </AuthContext.Provider>
   );

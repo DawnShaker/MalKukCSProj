@@ -77,6 +77,12 @@ export function createSupabaseAuth(
     return { session, user: profile };
   }
   return {
+    capabilities: {
+      identifier: "email",
+      signup: true,
+      recovery: true,
+      refresh: true,
+    },
     async authenticate(request, optional = false) {
       const token = cookies(request)[cookieName(request, "access")];
       if (!token) {

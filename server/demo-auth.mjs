@@ -101,6 +101,12 @@ export async function createDemoAuth(base) {
   return {
     store,
     auth: {
+      capabilities: {
+        identifier: "email",
+        signup: false,
+        recovery: false,
+        refresh: true,
+      },
       async authenticate(request, optional = false) {
         const id = sessions.get(
           cookies(request)[cookieName(request, "access")],

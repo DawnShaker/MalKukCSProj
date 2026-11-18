@@ -1,6 +1,7 @@
 let csrfToken = null;
 let sessionRequest = null;
 let refreshRequest = null;
+let refreshSupported = true;
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -21,6 +22,7 @@ async function responseData(response) {
       response.status,
     );
   if (data.csrfToken) csrfToken = data.csrfToken;
+  if (data.auth) refreshSupported = data.auth.refresh;
   return data;
 }
 export function getSession() {
@@ -61,6 +63,10 @@ export async function request(endpoint, options = {}, retry = true) {
   return responseData(response);
 }
 export function refreshSession() {
+  if (!refreshSupported)
+    return Promise.reject(
+      new ApiError("Сесія завершилась. Увійдіть повторно.", 401),
+    );
   refreshRequest ??= request(
     "/auth/refresh",
     { method: "POST", body: "{}" },

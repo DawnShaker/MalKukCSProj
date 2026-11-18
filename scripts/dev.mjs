@@ -6,7 +6,7 @@ import { Readable } from "node:stream";
 import { createHandler } from "../server/http.mjs";
 import { createLocalStore } from "../server/local-store.mjs";
 import { createSupabaseStore, normalizeState } from "../server/store.mjs";
-import { createSupabaseAuth } from "../server/auth.mjs";
+import { createConfiguredAuth } from "../server/auth-provider.mjs";
 import { createDemoAuth } from "../server/demo-auth.mjs";
 import { adaptLegacyData } from "../server/import.mjs";
 
@@ -16,6 +16,10 @@ const configured =
   process.env.SUPABASE_URL ||
   process.env.SUPABASE_SECRET_KEY ||
   process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (process.env.AUTH_PROVIDER === "security" && !configured)
+  throw new Error(
+    "Security authentication requires Supabase database settings. Configure SUPABASE_URL and SUPABASE_SECRET_KEY in .env.",
+  );
 const seed = adaptLegacyData(
   JSON.parse(
     await readFile(resolve(root, "RealEstateAgency/agency_data.json"), "utf8"),
@@ -24,10 +28,13 @@ const seed = adaptLegacyData(
 const storage = configured
   ? createSupabaseStore()
   : createLocalStore(resolve(root, ".local/agency_data.json"), seed);
-const demo = configured ? null : await createDemoAuth(storage);
+const demo =
+  configured || process.env.AUTH_PROVIDER === "security"
+    ? null
+    : await createDemoAuth(storage);
 const store = demo?.store || storage;
 const api = createHandler(() => store, {
-  auth: demo?.auth || createSupabaseAuth(() => store),
+  auth: demo?.auth || createConfiguredAuth(() => store),
 });
 const types = {
   ".html": "text/html; charset=utf-8",

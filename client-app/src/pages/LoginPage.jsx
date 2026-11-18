@@ -3,7 +3,9 @@ import { authApi } from "../api/http";
 import { useAuth } from "../auth/AuthContext";
 
 export default function LoginPage() {
-  const { login, error: serviceError } = useAuth();
+  const { login, error: serviceError, auth } = useAuth();
+  const usernameLogin = auth.identifier === "username";
+  const identifierId = usernameLogin ? "auth-username" : "auth-email";
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [visible, setVisible] = useState(false);
@@ -29,7 +31,12 @@ export default function LoginPage() {
     setError("");
     setMessage("");
     try {
-      if (mode === "login") await login(form);
+      if (mode === "login")
+        await login(
+          usernameLogin
+            ? { username: form.email, password: form.password }
+            : form,
+        );
       else {
         const result =
           mode === "signup"
@@ -96,16 +103,19 @@ export default function LoginPage() {
             </div>
           )}
           <div className="field">
-            <label htmlFor="auth-email">Email — обов’язково</label>
+            <label htmlFor={identifierId}>
+              {usernameLogin ? "Логін — обов’язково" : "Email — обов’язково"}
+            </label>
             <input
-              id="auth-email"
-              name="email"
-              type="email"
+              id={identifierId}
+              name={usernameLogin ? "username" : "email"}
+              type={usernameLogin ? "text" : "email"}
               autoComplete="username"
               spellCheck={false}
               autoCapitalize="none"
+              autoCorrect="off"
               value={form.email}
-              maxLength={254}
+              maxLength={usernameLogin ? 256 : 254}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
             />
@@ -153,23 +163,35 @@ export default function LoginPage() {
           </button>
         </form>
         <div className="auth-actions">
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => changeMode(mode === "signup" ? "login" : "signup")}
-          >
-            {mode === "signup"
-              ? "У мене вже є обліковий запис"
-              : "Створити обліковий запис"}
-          </button>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => changeMode(mode === "recover" ? "login" : "recover")}
-          >
-            {mode === "recover" ? "Повернутися до входу" : "Забули пароль?"}
-          </button>
+          {auth.signup && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => changeMode(mode === "signup" ? "login" : "signup")}
+            >
+              {mode === "signup"
+                ? "У мене вже є обліковий запис"
+                : "Створити обліковий запис"}
+            </button>
+          )}
+          {auth.recovery && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() =>
+                changeMode(mode === "recover" ? "login" : "recover")
+              }
+            >
+              {mode === "recover" ? "Повернутися до входу" : "Забули пароль?"}
+            </button>
+          )}
         </div>
+        {!auth.signup && !auth.recovery && (
+          <p className="text-muted">
+            Для створення облікового запису або відновлення доступу зверніться
+            до адміністратора.
+          </p>
+        )}
         {mode === "signup" && (
           <p className="text-muted">
             Нові користувачі отримують кабінет клієнта. Доступ агента надає

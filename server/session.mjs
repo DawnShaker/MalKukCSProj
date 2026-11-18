@@ -28,7 +28,13 @@ export function setSession(headers, request, session) {
     session.access_token,
     Math.min(session.expires_in || 3600, 3600),
   );
-  setCookie(headers, request, "refresh", session.refresh_token, 604800);
+  setCookie(
+    headers,
+    request,
+    "refresh",
+    session.refresh_token || "",
+    session.refresh_token ? 604800 : 0,
+  );
 }
 export function clearSession(headers, request) {
   for (const key of ["access", "refresh", "csrf"])

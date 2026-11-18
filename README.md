@@ -2,10 +2,12 @@
 
 Реализация этапов 1–6 учебного проекта. Проверка требований и архитектуры описана в [docs/project-stages.md](docs/project-stages.md).
 
-- **Веб-приложение:** React/Vite, Netlify Functions, Supabase Auth и таблицы PostgreSQL.
+- **Веб-приложение:** React/Vite, Netlify Functions, таблицы Supabase PostgreSQL и настраиваемый авторизатор: Supabase Auth либо [Security преподавателя](docs/security-server.md).
 - **C# приложение:** ASP.NET Core .NET 10, бизнес-логика и EF Core 10 с SQLite. Сохранение по умолчанию выполняется в БД, а JSON используется для импорта/экспорта.
 
 Netlify не запускает C# процесс: его HTTP API реализован в JavaScript. Вариант .NET позволяет запускать и проверять требуемый в задании EF Core локально. Оба варианта сохраняют исходные идентификаторы и бизнес-данные; изменения правил в них нужно согласовывать.
+
+Для авторизатора из `negativchik09/Security` подготовлены команды `npm.cmd run security:prepare` и `npm.cmd run security:start`, адаптер JWT и [пошаговая инструкция](docs/security-server.md). Для подключения опубликованного Netlify-сайта требуется отдельный HTTPS-адрес этого сервера.
 
 ## Быстрый локальный запуск веб-версии
 

@@ -76,16 +76,32 @@ npm.cmd run dev
 
 Переключение с Supabase Auth не переносит старые аккаунты автоматически. Security-идентификаторы имеют отдельное пространство UUID; совпадение email не связывает аккаунты и не передаёт права. Если такой логин уже есть в `user_profiles` от другого провайдера, требуется отдельно согласовать перенос профиля.
 
-## 5. Подключение сайта Netlify
+## 5. Бесплатное размещение Security на Render
 
-Netlify Functions остаются JavaScript-функциями. Security — отдельный постоянно работающий процесс C#, поэтому его нужно разместить на сервере, поддерживающем .NET 10 или Docker. Подготовленный Dockerfile:
+Netlify Functions остаются JavaScript-функциями. Для C# Security подготовлен `render.yaml` с **plan: free**. Аккаунты хранятся в PostgreSQL существующего Supabase-проекта, в отдельной закрытой схеме `security_accounts`. SQLite используется только локально; production без PostgreSQL не запускается. Таблицы недвижимости `public.properties`, `clients`, `deals` и их данные не заменяются.
+
+Render Free засыпает после 15 минут простоя и теряет локальные файлы при перезапуске; после сна запуск занимает примерно минуту. Поэтому бесплатному сервису не назначается диск, а база аккаунтов вынесена в Supabase. Первая попытка входа после сна может вернуть временную недоступность: повторите её примерно через минуту. Платные ресурсы в Blueprint не создаются. Без платёжного метода превышение бесплатных квот приводит к приостановке сервиса или сборок; с добавленным методом оплаты нужно отдельно ограничить расходы. [Актуальные ограничения Render](https://render.com/docs/free).
+
+Для развёртывания:
+
+1. Подключите Render к аккаунту и репозиторию `DawnShaker/MalKukCSProj`.
+2. Создайте Blueprint из ветки `security-integration`, файл `render.yaml`. Проверьте тариф **Free**. Для первого запуска должны пройти GitHub Actions.
+3. В Supabase проекта `wzovbpwmncglgccymjtu` откройте **Connect → Session pooler** и скопируйте PostgreSQL URI с портом `5432`. Подставьте пароль БД; специальные символы пароля должны быть percent-encoded. Не составляйте pooler-host по региону вручную. [Подключение Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres).
+4. Сохраните URI в **Render Environment → ConnectionStrings__Security**. Это строка подключения к PostgreSQL с паролем БД, а не `sb_secret_…`: API-ключ не заменяет пароль PostgreSQL. В переписку пароль присылать не нужно.
+5. Задайте **BootstrapAdmin__Username** и частный **BootstrapAdmin__Password** длиной хотя бы 12 символов. `Jwt__Key` Blueprint генерирует автоматически; issuer и audience уже заданы.
+6. Запустите deploy. При старте EF Core применяет миграцию только своего PostgreSQL-контекста и создаёт начального администратора. URL вида `https://…onrender.com/health` должен вернуть `{"status":"ok"}`.
+
+Пароли хранятся в виде хешей ASP.NET Identity. Для схемы аккаунтов отзывается доступ `PUBLIC`, `anon`, `authenticated`, `service_role` и включается RLS. Netlify получает профиль и роль из существующей CRM-схемы через свой API-ключ, а пароль проверяет отдельный сервер Security.
+
+Для самостоятельной сборки Docker из корня репозитория:
 
 ```powershell
-docker build -f integrations/security/Dockerfile -t realestate-security .local/security-source
-docker run -d --name realestate-security --restart unless-stopped --env-file .local/security-server.env -p 127.0.0.1:5252:8080 -v realestate-security-data:/data realestate-security
+docker build -f integrations/security/Dockerfile -t realestate-security .
 ```
 
-Это пример для хоста с Docker; контейнер публикует порт только на loopback. Перед ним нужен HTTPS reverse proxy, направляющий запросы на `127.0.0.1:5252`. Сохраняйте постоянный том `/data`: там находятся аккаунты и ключи. Swagger включён только локальным `security:start` в Development; в production он не публикуется. Dockerfile подготовлен, но сборка контейнера в текущей среде не проверялась — Docker здесь не установлен.
+Docker самостоятельно загружает закреплённую ревизию Security и применяет адаптацию; `.local`, `.env` и ключи не передаются в контекст сборки. Перед запуском контейнера нужны PostgreSQL-строка и настройки администратора/JWT в переменных окружения. Swagger включён локальным `security:start` в Development; в production доступна проверка `/health`.
+
+## 6. Подключение сайта Netlify
 
 В Netlify для Production задайте:
 
@@ -98,10 +114,12 @@ SECURITY_JWT_AUDIENCE=real-estate-agency
 BOOTSTRAP_MANAGER_USERNAME=логин_первого_администратора
 ```
 
-`SUPABASE_URL` и серверный ключ БД остаются нужны. JWT-параметры должны точно совпадать с сервером Security. В production HTTP и localhost для авторизатора не подходят. Ключи не должны иметь префикс `VITE_`. После настройки нужен новый deploy.
+`SUPABASE_URL` и серверный API-ключ CRM остаются нужны. `SECURITY_JWT_KEY` копируется из частного `Jwt__Key` созданного Render-сервиса. JWT-параметры должны точно совпадать; локальный ключ из `.local` не совпадёт с автоматически созданным Render-ключом. PostgreSQL-пароль Security в Netlify передавать не требуется. В production HTTP и localhost для авторизатора не подходят. Ключи не должны иметь префикс `VITE_`. После настройки нужен новый deploy.
 
 До появления HTTPS-адреса Security текущая публикация не переключается. При отсутствии `AUTH_PROVIDER` сохраняется прежний Supabase Auth; неизвестное значение провайдера блокирует вход, а не включает демо.
 
 ## Проверки
 
-`server/security-auth.test.mjs` проверяет совместимость HTTP-контракта, подпись HS256, issuer/audience, срок JWT, защиту от подделки ролей, cookie и закрытые операции. Дополнительно локально проверен настоящий запущенный Security → адаптер → сессия менеджера → чтение каталога. Эта проверка использовала отдельное хранилище профилей и не меняла production Supabase.
+`server/security-auth.test.mjs` проверяет совместимость HTTP-контракта, подпись HS256, issuer/audience, срок JWT, защиту от подделки ролей, cookie и закрытые операции. `npm run security:check` проверяет настоящий сервер на loopback и отдельное хранилище профилей; production Supabase он не меняет.
+
+GitHub Actions проверяет API/SQL, React-сборку, C# EF Core и сборку Docker Security. В отдельной временной PostgreSQL CI запускает Security, проверяет вход, пересоздаёт контейнер и проверяет сохранение идентификатора аккаунта. Это не развёртывание в вашем облачном проекте. После первого успешного CI результат Docker-проверки доступен в Actions.

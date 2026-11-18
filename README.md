@@ -7,7 +7,7 @@
 
 Netlify не запускает C# процесс: его HTTP API реализован в JavaScript. Вариант .NET позволяет запускать и проверять требуемый в задании EF Core локально. Оба варианта сохраняют исходные идентификаторы и бизнес-данные; изменения правил в них нужно согласовывать.
 
-Для авторизатора из `negativchik09/Security` подготовлены команды `npm.cmd run security:prepare` и `npm.cmd run security:start`, адаптер JWT и [пошаговая инструкция](docs/security-server.md). Для подключения опубликованного Netlify-сайта требуется отдельный HTTPS-адрес этого сервера.
+Для авторизатора из `negativchik09/Security` подготовлены команды `npm.cmd run security:prepare` и `npm.cmd run security:start`, адаптер JWT и [пошаговая инструкция](docs/security-server.md). Бесплатное размещение на Render описано в `render.yaml`; аккаунты сохраняются в PostgreSQL Supabase. Для подключения Netlify требуется HTTPS-адрес созданного сервера.
 
 ## Быстрый локальный запуск веб-версии
 
@@ -145,6 +145,8 @@ npm.cmd run db:export -- .local/agency-export.json
 Повторный импорт сохраняет изменения существующих облачных записей. Конфликтующие сделки на один объект пропускаются и указываются в отчёте. Экспорт не перезаписывает существующий файл.
 
 ## Проверки
+
+GitHub Actions (`.github/workflows/ci.yml`) запускает проверки для `main`, `security-integration` и pull request в `main`: API/SQL и React, EF Core, а также Docker Security с PostgreSQL и сохранением аккаунта после пересоздания контейнера.
 
 ```powershell
 npm.cmd test

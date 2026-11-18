@@ -1,0 +1,95 @@
+name: Project checks
+
+on:
+  push:
+    branches: [main, security-integration]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: API, PostgreSQL schema and React build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client-app/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  dotnet:
+    name: C# EF Core persistence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet run --project tests/RealEstateAgency.PersistenceChecks --configuration Release
+
+  security:
+    name: Security Docker and persistent PostgreSQL accounts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run security:prepare
+      - run: docker build -f integrations/security/Dockerfile -t realestate-security:ci .
+      - name: Start isolated PostgreSQL
+        run: |
+          docker network create security-check
+          docker run -d --name security-postgres-ci --network security-check \
+            -e POSTGRES_USER=security_test -e POSTGRES_DB=security_test \
+            -e POSTGRES_PASSWORD=ci-only-password \
+            --health-cmd='pg_isready -U security_test -d security_test' \
+            --health-interval=1s --health-timeout=3s --health-retries=60 postgres:17
+          for attempt in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' security-postgres-ci)" = healthy ]; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Start Security with persistent account storage
+        run: |
+          docker run -d --name security-ci --network security-check \
+            --env-file .local/security-server.env -p 127.0.0.1:5252:8080 \
+            -e 'ConnectionStrings__Security=postgresql://security_test:ci-only-password@security-postgres-ci:5432/security_test?sslmode=disable' \
+            realestate-security:ci
+      - run: npm run security:check
+      - name: Verify the same account survives a fresh container
+        run: |
+          docker rm -f security-ci
+          docker run -d --name security-ci --network security-check \
+            --env-file .local/security-server.env -p 127.0.0.1:5252:8080 \
+            -e 'ConnectionStrings__Security=postgresql://security_test:ci-only-password@security-postgres-ci:5432/security_test?sslmode=disable' \
+            realestate-security:ci
+          npm run security:check -- --expect-same-user
+      - name: Diagnostics
+        if: failure()
+        run: docker logs security-ci 2>&1 || true

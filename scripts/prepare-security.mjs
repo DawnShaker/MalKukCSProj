@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const target = resolve(root, ".local/security-source");
@@ -46,7 +46,7 @@ const seed = await readFile(
 const originalProgram = git(["show", "HEAD:Security/Program.cs"], target);
 if (!originalProgram.includes("ValidateLifetime = false"))
   throw new Error("Unexpected upstream authentication configuration");
-const program = originalProgram
+const legacyProgram = originalProgram
   .replace("ValidateLifetime = false", "ValidateLifetime = true")
   .replace(
     "var builder = WebApplication.CreateBuilder(args);",
@@ -61,6 +61,37 @@ if (Encoding.UTF8.GetByteCount(builder.Configuration["Jwt:Key"] ?? "") < 32)
     "using System.Text;",
     "using System.Text;\nusing Microsoft.AspNetCore.DataProtection;",
   );
+const program = legacyProgram
+  .replace(
+    "builder.Services.AddIdentity<IdentityUser, IdentityRole>(o =>",
+    "var identity = builder.Services.AddIdentity<IdentityUser, IdentityRole>(o =>",
+  )
+  .replace(".AddEntityFrameworkStores<ApplicationDbContext>()", "")
+  .replace(
+    ".AddDefaultTokenProviders();",
+    `.AddDefaultTokenProviders();
+
+var securityConnection = PostgresConnection.Normalize(builder.Configuration.GetConnectionString("Security"));
+if (builder.Environment.IsProduction() && string.IsNullOrWhiteSpace(securityConnection))
+    throw new InvalidOperationException("Hosted Security requires ConnectionStrings__Security; SQLite is for local development only.");
+if (!string.IsNullOrWhiteSpace(securityConnection))
+{
+    builder.Services.AddDbContext<PostgresApplicationDbContext>(options => options.UseNpgsql(securityConnection,
+        postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", "security_accounts")));
+    identity.AddEntityFrameworkStores<PostgresApplicationDbContext>();
+}
+else identity.AddEntityFrameworkStores<ApplicationDbContext>();`,
+  )
+  .replace(
+    "app.MapControllers();",
+    'app.MapControllers();\napp.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();',
+  )
+  .replace(
+    "var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();",
+    `DbContext dbContext = !string.IsNullOrWhiteSpace(securityConnection)
+        ? scope.ServiceProvider.GetRequiredService<PostgresApplicationDbContext>()
+        : scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();`,
+  );
 const originalSettings = git(
   ["show", "HEAD:Security/appsettings.json"],
   target,
@@ -68,7 +99,7 @@ const originalSettings = git(
 const settings = JSON.parse(originalSettings.replace(/^\uFEFF/, ""));
 delete (settings.Jwt || settings.JWT || {}).Key;
 const originalProject = git(["show", "HEAD:Security/Security.csproj"], target);
-const project = originalProject
+const legacyProject = originalProject
   .replace("net8.0", "net10.0")
   .replace(
     /(<PackageReference Include="Microsoft\.[^"]+" Version=")[^"]+/g,
@@ -82,21 +113,67 @@ const project = originalProject
     /<PackageReference Include="Microsoft.EntityFrameworkCore.Tools"/g,
     '<PackageReference Include="Microsoft.EntityFrameworkCore.Design"',
   );
+const project = legacyProject.replace(
+  "</ItemGroup>",
+  '    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />\n    </ItemGroup>',
+);
 const desired = {
   "Security/Program.cs": program,
   "Security/Auth/Seed.cs": seed,
   "Security/appsettings.json": JSON.stringify(settings, null, 2) + "\n",
   "Security/Security.csproj": project,
+  "Security/Auth/PostgresApplicationDbContext.cs": await readFile(
+    resolve(root, "integrations/security/PostgresApplicationDbContext.cs"),
+    "utf8",
+  ),
+  "Security/Auth/PostgresConnection.cs": await readFile(
+    resolve(root, "integrations/security/PostgresConnection.cs"),
+    "utf8",
+  ),
 };
+const migrationDirectory = resolve(
+  root,
+  "integrations/security/PostgresMigrations",
+);
+if (existsSync(migrationDirectory))
+  for (const file of await readdir(migrationDirectory))
+    if (file.endsWith(".cs"))
+      desired[`Security/PostgresMigrations/${file}`] = await readFile(
+        resolve(migrationDirectory, file),
+        "utf8",
+      );
 const normalized = (text) => text.replaceAll("\r", "").trimEnd();
 for (const [path, value] of Object.entries(desired)) {
-  const current = normalized(await readFile(resolve(target, path), "utf8"));
-  const original = normalized(git(["show", `HEAD:${path}`], target));
-  if (current !== original && current !== normalized(value))
+  const current = existsSync(resolve(target, path))
+    ? normalized(await readFile(resolve(target, path), "utf8"))
+    : null;
+  const tracked = git(["ls-tree", "--name-only", "HEAD", path], target);
+  const original = tracked
+    ? normalized(git(["show", `HEAD:${path}`], target))
+    : null;
+  const previous =
+    path === "Security/Program.cs"
+      ? normalized(legacyProgram)
+      : path === "Security/Security.csproj"
+        ? normalized(legacyProject)
+        : null;
+  if (
+    current !== original &&
+    current !== normalized(value) &&
+    current !== previous
+  )
     throw new Error(`Preserving unexpected local edits: ${path}`);
 }
-for (const [path, value] of Object.entries(desired))
+for (const [path, value] of Object.entries(desired)) {
+  await mkdir(dirname(resolve(target, path)), { recursive: true });
   await writeFile(resolve(target, path), value, "utf8");
+}
+if (process.argv.includes("--source-only")) {
+  console.log(
+    `Prepared Security ${revision.slice(0, 7)} source for .NET 10, PostgreSQL and hosted deployment. No credentials generated.`,
+  );
+  process.exit(0);
+}
 const configPath = resolve(root, ".local/security-config.json");
 let config;
 if (existsSync(configPath))

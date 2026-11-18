@@ -14,7 +14,8 @@
     "db:prepare": "node scripts/prepare-sql.mjs",
     "db:export": "node --env-file-if-exists=.env scripts/export-data.mjs",
     "security:prepare": "node scripts/prepare-security.mjs",
-    "security:start": "node scripts/start-security.mjs"
+    "security:start": "node scripts/start-security.mjs",
+    "security:check": "node scripts/check-security.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.16"

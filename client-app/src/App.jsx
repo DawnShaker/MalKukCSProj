@@ -27,7 +27,7 @@ function Application() {
   if (loading)
     return (
       <main className="app-container">
-        <p role="status">Перевіряємо сесію…</p>
+        <p role="status">Підключаємося до сервера… Перший запуск може тривати до двох хвилин.</p>
       </main>
     );
   if (!user) return <LoginPage />;

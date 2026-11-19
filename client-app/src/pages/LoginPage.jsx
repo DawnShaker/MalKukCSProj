@@ -31,13 +31,15 @@ export default function LoginPage() {
     setError("");
     setMessage("");
     try {
-      if (mode === "login")
+      if (mode === "login") {
+        setMessage("Підключаємося до сервера входу… Перший запуск може тривати до двох хвилин.");
         await login(
           usernameLogin
             ? { username: form.email, password: form.password }
             : form,
         );
-      else {
+        setMessage("");
+      } else {
         const result =
           mode === "signup"
             ? await authApi.signup(form)
@@ -47,6 +49,7 @@ export default function LoginPage() {
         setForm({ ...form, password: "" });
       }
     } catch (error) {
+      setMessage("");
       setError(error.message);
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {

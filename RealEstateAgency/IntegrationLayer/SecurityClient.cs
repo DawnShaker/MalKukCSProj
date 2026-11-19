@@ -23,19 +23,45 @@ public class SecurityClient
         this.environment = environment;
     }
 
+    public async Task<bool> IsReady(CancellationToken cancellationToken)
+    {
+        var address = GetAddress();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        try
+        {
+            using var response = await http.GetAsync(new Uri(address, "/health"), timeout.Token);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentType?.MediaType != "application/json")
+                return false;
+            var health = await response.Content.ReadFromJsonAsync<HealthResponse>(timeout.Token);
+            return health?.Status == "ok";
+        }
+        catch (Exception error) when (error is HttpRequestException or System.Text.Json.JsonException ||
+            error is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
+    private Uri GetAddress()
+    {
+        if (!Uri.TryCreate(configuration["Security:Url"], UriKind.Absolute, out var address) ||
+            (address.Scheme != "https" && !(environment.IsDevelopment() && address.IsLoopback && address.Scheme == "http")) ||
+            address.UserInfo != "" || address.AbsolutePath != "/" || address.Query != "" || address.Fragment != "")
+            throw new ApiException(503, "Налаштуйте адресу сервера Security.");
+        return address;
+    }
+
     public async Task<SecurityUser> Login(string username, string password)
     {
         if (string.IsNullOrWhiteSpace(username) || username.Length > 256 || string.IsNullOrEmpty(password) || password.Length > 128)
             throw new ApiException(400, "Вкажіть логін і пароль.");
 
-        var url = configuration["Security:Url"];
+        var address = GetAddress();
         var key = configuration["Security:JwtKey"] ?? "";
         var issuer = configuration["Security:Issuer"];
         var audience = configuration["Security:Audience"];
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var address) ||
-            (!address.Scheme.Equals("https") && !(environment.IsDevelopment() && address.IsLoopback && address.Scheme == "http")) ||
-            address.UserInfo != "" || address.AbsolutePath != "/" || address.Query != "" || address.Fragment != "" ||
-            Encoding.UTF8.GetByteCount(key) < 32 || string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
+        if (Encoding.UTF8.GetByteCount(key) < 32 || string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
             throw new ApiException(503, "Налаштуйте адресу та параметри JWT сервера Security.");
 
         HttpResponseMessage response;
@@ -89,5 +115,10 @@ public class SecurityClient
     private class LoginResponse
     {
         public string Token { get; set; } = "";
+    }
+
+    private class HealthResponse
+    {
+        public string Status { get; set; } = "";
     }
 }

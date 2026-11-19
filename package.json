@@ -9,7 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
-    "test": "node --test server/*.test.mjs",
+    "test": "node --test server/*.test.mjs tests/http-login.test.mjs",
     "db:import": "node --env-file-if-exists=.env scripts/import-data.mjs",
     "db:prepare": "node scripts/prepare-sql.mjs",
     "db:export": "node --env-file-if-exists=.env scripts/export-data.mjs",

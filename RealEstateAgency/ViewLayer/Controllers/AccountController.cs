@@ -31,6 +31,13 @@ public class AccountController : ControllerBase
         auth = new { identifier = "username", signup = false, recovery = false, refresh = false }, needsRefresh = false
     });
 
+    [HttpGet("ready")]
+    public async Task<IActionResult> Ready(CancellationToken cancellationToken)
+    {
+        var ready = await security.IsReady(cancellationToken);
+        return Ok(new { ready });
+    }
+
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto dto)
     {

@@ -14,8 +14,16 @@ const directory = await mkdtemp(join(tmpdir(), 'agency-stage56-'));
 const key = randomBytes(48).toString('hex');
 const ids = new Map();
 let application, logs = '', checks = 0;
+let securityHealth = 'ready', loginRequests = 0;
 function check(condition, name) { assert(condition, name); checks++; console.log(`PASS: ${name}`); }
 const security = createServer(async (request, response) => {
+  if (request.url === '/health' && request.method === 'GET') {
+    if (securityHealth === 'starting') response.writeHead(502).end();
+    else if (securityHealth === 'html') response.writeHead(200, {'Content-Type':'text/html'}).end('<html>Starting</html>');
+    else response.writeHead(200, {'Content-Type':'application/json'}).end(JSON.stringify({status:'ok'}));
+    return;
+  }
+  loginRequests++;
   let body = '';
   for await (const chunk of request) body += chunk;
   const { username, password } = JSON.parse(body || '{}');
@@ -86,6 +94,12 @@ try {
   assert.equal(imported.status,0,imported.stderr || imported.stdout);
   await start();
   const anonymous=browser();
+  check((await anonymous.request('/auth/ready')).body.ready===true, 'readiness confirms the Security health endpoint');
+  securityHealth='starting';
+  check((await anonymous.request('/auth/ready')).body.ready===false && loginRequests===0, 'a sleeping Security server is checked without sending credentials');
+  securityHealth='html';
+  check((await anonymous.request('/auth/ready')).body.ready===false, 'a platform loading page is not accepted as a ready Security server');
+  securityHealth='ready';
   check((await anonymous.request('/properties')).status===401,'C# API rejects anonymous access');
   await anonymous.request('/auth/session');
   check((await anonymous.request('/auth/login','POST',{username:'owner',password:'test-password'},false)).status===400,'login requires an antiforgery token');

@@ -6,6 +6,13 @@
 [build.environment]
   NODE_VERSION = "24"
 
+# Wake Security from Netlify before sending credentials through the C# API.
+[[redirects]]
+  from = "/api/auth/ready"
+  to = "https://realestate-security-whp8.onrender.com/health"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/api/*"
   to = "https://realestate-agency-dawnshaker.onrender.com/api/:splat"

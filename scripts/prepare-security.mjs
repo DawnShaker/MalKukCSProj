@@ -61,6 +61,7 @@ if (Encoding.UTF8.GetByteCount(builder.Configuration["Jwt:Key"] ?? "") < 32)
     "using System.Text;",
     "using System.Text;\nusing Microsoft.AspNetCore.DataProtection;",
   );
+const healthEndpoint = 'app.MapGet("/health", (HttpContext context) => { context.Response.Headers.CacheControl = "no-store"; return Results.Ok(new { status = "ok", ready = true }); }).AllowAnonymous();';
 const program = legacyProgram
   .replace(
     "builder.Services.AddIdentity<IdentityUser, IdentityRole>(o =>",
@@ -84,7 +85,7 @@ else identity.AddEntityFrameworkStores<ApplicationDbContext>();`,
   )
   .replace(
     "app.MapControllers();",
-    'app.MapControllers();\napp.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();',
+    `app.MapControllers();\n${healthEndpoint}`,
   )
   .replace(
     "var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();",
@@ -143,6 +144,8 @@ if (existsSync(migrationDirectory))
         "utf8",
       );
 const normalized = (text) => text.replaceAll("\r", "").trimEnd();
+const previousHostedProgram = normalized(program.replace(healthEndpoint,
+  'app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();'));
 for (const [path, value] of Object.entries(desired)) {
   const current = existsSync(resolve(target, path))
     ? normalized(await readFile(resolve(target, path), "utf8"))
@@ -160,7 +163,8 @@ for (const [path, value] of Object.entries(desired)) {
   if (
     current !== original &&
     current !== normalized(value) &&
-    current !== previous
+    current !== previous &&
+    !(path === "Security/Program.cs" && current === previousHostedProgram)
   )
     throw new Error(`Preserving unexpected local edits: ${path}`);
 }

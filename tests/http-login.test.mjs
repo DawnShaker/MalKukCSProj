@@ -59,6 +59,7 @@ test('persistent unavailability stops waiting and never submits the password', a
   let time = 0, calls = 0;
   t.mock.method(Date, 'now', () => time);
   t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.endsWith('/session')) return session();
     calls++;time += 120_001;
     assert.equal(url, '/api/auth/ready');assert.equal(options.body, undefined);
     return json({ready:false});
@@ -66,6 +67,21 @@ test('persistent unavailability stops waiting and never submits the password', a
   const api = await client();
   await assert.rejects(api.authApi.login({username:'test-user',password:'test-password'}), error=>error.status===503);
   assert.equal(calls, 1);
+});
+
+test('Security and the C# session start together instead of adding their startup delays', async t => {
+  let sessionStarted = false;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.endsWith('/session')) {sessionStarted=true;return session();}
+    if (url.endsWith('/ready')) {
+      await new Promise(resolve=>setTimeout(resolve,10));
+      assert(sessionStarted, 'the session request must start before readiness finishes');
+      return json({status:'ok',ready:true});
+    }
+    return json({user:{role:'manager'}});
+  });
+  const api = await client();
+  assert.equal((await api.authApi.login({username:'test-user',password:'test-password'})).user.role,'manager');
 });
 
 test('an authentication gate is reported without retries', async t => {

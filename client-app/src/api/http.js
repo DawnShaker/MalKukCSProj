@@ -111,8 +111,7 @@ export const authApi = {
   session: getSession,
   refresh: refreshSession,
   async login(dto) {
-    await getAuthData("/ready");
-    await getSession();
+    await Promise.all([getAuthData("/ready"), getSession()]);
     return request(
       "/auth/login",
       { method: "POST", body: JSON.stringify(dto) },
